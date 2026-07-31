@@ -7,9 +7,10 @@ import AttachmentModals from './AttachmentModals';
 import EmojiPicker from 'emoji-picker-react';
 import { useContacts } from '../contexts/ContactsContext';
 
-function ChatWindow({ user, chat, onUpdateChat, onLogout, onStartCall, conversations = [], groups = [] }) {
+function ChatWindow({ user, chat, onUpdateChat, onLogout, onStartCall, conversations = [], groups = [], onCloseChat, className = '' }) {
   const { getDisplayName } = useContacts();
   const [messages, setMessages] = useState([]);
+  const [showScrollDown, setShowScrollDown] = useState(false);
   const [newMessage, setNewMessage] = useState('');
   const [selectedFile, setSelectedFile] = useState(null);
   const [isRecording, setIsRecording] = useState(false);
@@ -126,7 +127,13 @@ function ChatWindow({ user, chat, onUpdateChat, onLogout, onStartCall, conversat
     if (!chatContainerRef.current) return;
     const { scrollTop, scrollHeight, clientHeight } = chatContainerRef.current;
     // Auto-scroll if within 100px of the bottom
-    shouldAutoScroll.current = scrollHeight - scrollTop - clientHeight < 100;
+    const isNearBottom = scrollHeight - scrollTop - clientHeight < 100;
+    shouldAutoScroll.current = isNearBottom;
+    setShowScrollDown(!isNearBottom && scrollHeight > clientHeight);
+  };
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
 
@@ -432,7 +439,7 @@ function ChatWindow({ user, chat, onUpdateChat, onLogout, onStartCall, conversat
   };
 
   return (
-    <div className="chat-window">
+    <div className={`chat-window ${className}`}>
       {selectionMode ? (
         <div className="chat-header" style={{ backgroundColor: 'var(--bg-secondary)', justifyContent: 'space-between' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
@@ -449,8 +456,16 @@ function ChatWindow({ user, chat, onUpdateChat, onLogout, onStartCall, conversat
         </div>
       ) : (
       <div className="chat-header">
-        <div className="chat-header-info" onClick={() => setShowInfo(true)} style={{ cursor: 'pointer' }}>
-          <div className="user-avatar" style={{ backgroundColor: isGroup ? '#f59e0b' : '#2764FF', overflow: 'hidden' }}>
+        <div className="chat-header-info">
+          {onCloseChat && (
+            <button className="mobile-only" onClick={onCloseChat} style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', marginRight: '10px', padding: '5px', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
+              <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor">
+                <path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"></path>
+              </svg>
+            </button>
+          )}
+          <div onClick={() => setShowInfo(true)} style={{ cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
+            <div className="user-avatar" style={{ backgroundColor: isGroup ? '#f59e0b' : '#2764FF', overflow: 'hidden' }}>
             {isGroup ? (
               chat.avatar ? (
                 <img 
@@ -479,7 +494,8 @@ function ChatWindow({ user, chat, onUpdateChat, onLogout, onStartCall, conversat
               chatName?.charAt(0).toUpperCase()
             )}
           </div>
-          <div className="chat-header-text">
+          </div>
+          <div className="chat-header-text" onClick={() => setShowInfo(true)} style={{ cursor: 'pointer' }}>
             <div className="chat-header-name">{chatName}</div>
             <div className="chat-header-status">{renderStatus()}</div>
           </div>
@@ -810,6 +826,34 @@ function ChatWindow({ user, chat, onUpdateChat, onLogout, onStartCall, conversat
         <div ref={messagesEndRef} />
 
       </div>
+
+      {showScrollDown && (
+        <button
+          onClick={scrollToBottom}
+          style={{
+            position: 'absolute',
+            bottom: '90px',
+            right: '20px',
+            width: '40px',
+            height: '40px',
+            borderRadius: '50%',
+            backgroundColor: 'var(--bg-secondary)',
+            color: 'var(--text-secondary)',
+            border: '1px solid var(--border-color)',
+            boxShadow: '0 2px 10px rgba(0,0,0,0.1)',
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+            cursor: 'pointer',
+            zIndex: 100
+          }}
+          title="Scroll to bottom"
+        >
+          <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor">
+            <path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/>
+          </svg>
+        </button>
+      )}
 
       {chat.is_blocked ? (
         <div style={{ padding: '20px', textAlign: 'center', backgroundColor: 'var(--bg-secondary)', color: 'var(--text-secondary)', fontSize: '14px' }}>

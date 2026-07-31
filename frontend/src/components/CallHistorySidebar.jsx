@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import api, { getMediaUrl } from '../api';
 
-function CallHistorySidebar({ user, onSelectChat, onLogout, onRequestAppLock }) {
+function CallHistorySidebar({ user, onSelectChat, onLogout, onRequestAppLock, className = '' }) {
   const [calls, setCalls] = useState([]);
   const [showMenu, setShowMenu] = useState(false);
 
@@ -52,7 +52,7 @@ function CallHistorySidebar({ user, onSelectChat, onLogout, onRequestAppLock }) 
   };
 
   return (
-    <div className="sidebar" style={{ backgroundColor: 'var(--bg-primary)' }}>
+    <div className={`sidebar ${className}`} style={{ backgroundColor: 'var(--bg-primary)' }}>
       <div className="sidebar-header" style={{ display: 'flex', justifyContent: 'space-between' }}>
         <span>Calls</span>
         <div style={{ display: 'flex', gap: '15px' }}>

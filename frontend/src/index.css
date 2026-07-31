@@ -198,3 +198,108 @@ a { color: var(--primary); text-decoration: none; }
 .empty-chat-icon { width: 100px; height: 100px; color: var(--primary); margin-bottom: 20px; }
 .empty-chat h2 { font-weight: 400; font-size: 28px; margin-bottom: 10px; color: #41525d; }
 .empty-chat p { font-size: 14px; }
+
+/* Mobile Responsiveness */
+.mobile-only { display: none !important; }
+
+@media (max-width: 768px) {
+  .mobile-only { display: flex !important; }
+  .mobile-hidden { display: none !important; }
+  
+  .sidebar {
+    flex: 1 !important;
+    width: auto !important;
+    max-width: none !important;
+  }
+  
+  .chat-messages {
+    padding: 15px 15px !important;
+  }
+  
+  .message {
+    max-width: 90% !important;
+  }
+  
+  .chat-input-container {
+    padding: 10px 10px !important;
+  }
+  
+  .chat-header {
+    padding: 0 10px !important;
+  }
+}
+
+@media (max-width: 768px) {
+  .message img {
+    max-width: 220px !important;
+    max-height: 220px !important;
+  }
+  
+  .chat-header-text {
+    max-width: 180px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  
+  .chat-header-status {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
+/* Prevent flexbox horizontal overflow */
+.app-container > * {
+  min-width: 0;
+}
+
+.chat-window {
+  min-width: 0;
+  overflow: hidden;
+}
+
+.message {
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  word-break: break-word;
+}
+
+@media (max-width: 768px) {
+  .chat-header-info {
+    flex: 1;
+    min-width: 0;
+  }
+  
+  .chat-header-text {
+    flex: 1;
+    min-width: 0;
+  }
+  
+  /* Target the right-side icons container in the header */
+  .chat-header > div:last-child {
+    gap: 10px !important;
+  }
+  
+  .chat-header > div:last-child svg {
+    width: 20px !important;
+    height: 20px !important;
+  }
+}
+
+/* Chat item menu arrow visibility */
+.chat-menu-arrow {
+  display: none;
+}
+.chat-menu-arrow.active {
+  display: block;
+}
+.conversation-item:hover .chat-menu-arrow {
+  display: block;
+}
+
+@media (max-width: 768px) {
+  .chat-menu-arrow {
+    display: block !important;
+  }
+}

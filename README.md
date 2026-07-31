@@ -97,6 +97,16 @@ This application uses a combination of REST APIs and WebSockets to achieve real-
 5. **WebSocket Push**: The `ChatConsumer` listening to that room group grabs the message data and pushes it down the open WebSocket connection of anyone currently viewing that chat.
 6. **Instant UI Update (Frontend)**: The receiving user's React frontend detects the incoming WebSocket message and instantly appends it to their chat window, updating the UI in real-time without requiring a page refresh.
 
+## WebRTC Architecture: How Calls Work
+
+This application utilizes native WebRTC (Web Real-Time Communication) to provide high-quality peer-to-peer audio and video calls, completely free of any third-party calling services (like Twilio or Agora). Here is how a call is established:
+
+1. **Initiating the Call (Caller)**: The user clicks the video or audio call button. The browser immediately asks for microphone/camera permissions (`getUserMedia`). Once granted, it creates an `RTCPeerConnection` and generates an SDP "Offer" containing the caller's media capabilities.
+2. **Signaling over WebSockets**: WebRTC requires a "signaling" channel to exchange connection data before the actual peer-to-peer link can start. The app reuses the existing Django Channels WebSocket connection to securely transmit the SDP Offer to the callee.
+3. **Receiving the Call (Callee)**: The receiving user's frontend gets the WebSocket event. A full-screen "Incoming Call" overlay rings. If they click "Accept", they grant media permissions and generate an SDP "Answer", which is sent back over WebSockets.
+4. **ICE Candidate Exchange**: Simultaneously, both browsers use STUN servers (like Google's public STUN servers) to discover their own public IP addresses (ICE candidates). These IP addresses are rapidly exchanged through the WebSocket signaling server so the two devices know how to reach each other over the internet.
+5. **Direct Peer-to-Peer Connection**: Once the SDP and ICE data is successfully exchanged, the WebSocket signaling is complete. A direct, encrypted, peer-to-peer WebRTC connection is established between the two users. Video and audio stream directly from computer to computer, bypassing the backend server entirely for maximum privacy and zero latency!
+
 ## Testing with Friends over the Internet (No Deploy Required!)
 
 If you want your friends to connect to your app while they are at their own houses (not on your WiFi), you can use a free tunneling tool like **Ngrok**. 

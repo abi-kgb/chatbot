@@ -370,7 +370,7 @@ function ChatLayout({ user, setUser, onLogout, onRequestAppLock }) {
 
   return (
     <div className="app-container">
-      <div className="left-nav">
+      <div className={`left-nav ${activeChat ? 'mobile-hidden' : ''}`}>
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
           <div className={`nav-icon ${activeTab === 'all' ? 'active' : ''}`} title="Chats" onClick={() => setActiveTab('all')} style={{ cursor: 'pointer' }}>
             <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M12 2C6.477 2 2 6.14 2 11.25c0 2.87 1.455 5.432 3.738 7.106L5 22l3.415-1.95A10.63 10.63 0 0012 20.5c5.523 0 10-4.14 10-9.25S17.523 2 12 2z"></path></svg>
@@ -398,6 +398,7 @@ function ChatLayout({ user, setUser, onLogout, onRequestAppLock }) {
           onSelectChat={setActiveChat} 
           onLogout={onLogout} 
           onRequestAppLock={onRequestAppLock} 
+          className={activeChat ? 'mobile-hidden' : ''}
         />
       ) : (
         <Sidebar 
@@ -411,6 +412,7 @@ function ChatLayout({ user, setUser, onLogout, onRequestAppLock }) {
           onRequestAppLock={onRequestAppLock}
           onCreateGroup={createGroup}
           activeTab={activeTab}
+          className={activeChat ? 'mobile-hidden' : ''}
         />
       )}
       
@@ -423,9 +425,11 @@ function ChatLayout({ user, setUser, onLogout, onRequestAppLock }) {
           onStartCall={startGlobalCall}
           conversations={conversations}
           groups={groups}
+          onCloseChat={() => setActiveChat(null)}
+          className={!activeChat ? 'mobile-hidden' : ''}
         />
       ) : (
-        <div className="empty-chat">
+        <div className="empty-chat mobile-hidden">
           <svg className="empty-chat-icon" viewBox="0 0 24 24" fill="currentColor">
             <path d="M12 2C6.48 2 2 5.58 2 10c0 1.95.87 3.76 2.37 5.16L3 20l4.3-2.15c1.4.67 3 .95 4.7.95 5.52 0 10-3.58 10-8s-4.48-8-10-8zm-2 11H8V9h2v4zm6 0h-2V9h2v4z"/>
           </svg>

@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react';
 import api, { getMediaUrl } from '../api';
 import { useContacts } from '../contexts/ContactsContext';
 
-function Sidebar({ user, onLogout, conversations, groups, activeChat, onSelectChat, refreshChats, onRequestAppLock, onCreateGroup, activeTab }) {
+function Sidebar({ user, onLogout, conversations, groups, activeChat, onSelectChat, refreshChats, onRequestAppLock, onCreateGroup, activeTab, className = '' }) {
   const { getDisplayName } = useContacts();
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState([]);
@@ -17,6 +17,7 @@ function Sidebar({ user, onLogout, conversations, groups, activeChat, onSelectCh
   const [showArchived, setShowArchived] = useState(false);
 
   const getOtherParticipant = (participants) => {
+    if (!participants || !Array.isArray(participants)) return null;
     return participants.find(p => p.id !== user?.id) || participants[0];
   };
 
@@ -141,7 +142,7 @@ function Sidebar({ user, onLogout, conversations, groups, activeChat, onSelectCh
   };
 
   return (
-    <div className="sidebar">
+    <div className={`sidebar ${className}`}>
       {selectionMode ? (
         <div className="sidebar-header" style={{ display: 'flex', justifyContent: 'space-between', backgroundColor: 'var(--bg-primary)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
@@ -307,11 +308,16 @@ function Sidebar({ user, onLogout, conversations, groups, activeChat, onSelectCh
                           {unreadCount}
                         </span>
                       )}
-                      {(hoveredChatId === chat.id || dropdownPos?.chat?.id === chat.id) && !selectionMode && (
+                      {!selectionMode && (
                         <div 
+                           className={`chat-menu-arrow ${(hoveredChatId === chat.id || dropdownPos?.chat?.id === chat.id) ? 'active' : ''}`}
                            style={{ color: 'var(--text-secondary)', cursor: 'pointer' }}
                            onClick={(e) => {
                                e.stopPropagation();
+                               if (dropdownPos?.chat?.id === chat.id) {
+                                 setDropdownPos(null);
+                                 return;
+                               }
                                const rect = e.currentTarget.getBoundingClientRect();
                                let yPos = rect.bottom;
                                if (yPos + 260 > window.innerHeight) {
@@ -402,13 +408,14 @@ function Sidebar({ user, onLogout, conversations, groups, activeChat, onSelectCh
       {dropdownPos && (
         <>
           <div 
-            style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 1000 }} 
-            onClick={(e) => { e.stopPropagation(); setDropdownPos(null); }}
+            style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 9999 }} 
+            onClick={(e) => { e.preventDefault(); e.stopPropagation(); setDropdownPos(null); }}
+            onTouchStart={(e) => { e.stopPropagation(); setDropdownPos(null); }}
             onTouchEnd={(e) => { e.stopPropagation(); setDropdownPos(null); }}
           />
           <div style={{
             position: 'fixed', left: dropdownPos.x, top: dropdownPos.y, backgroundColor: 'var(--bg-secondary)', borderRadius: '12px',
-            boxShadow: '0 2px 10px rgba(0,0,0,0.3)', padding: '10px 0', minWidth: '180px', zIndex: 1001
+            boxShadow: '0 2px 10px rgba(0,0,0,0.3)', padding: '10px 0', minWidth: '180px', zIndex: 10000
           }}>
             {[
               { label: dropdownPos.chat.is_pinned ? 'Unpin chat' : 'Pin chat', onClick: () => {
