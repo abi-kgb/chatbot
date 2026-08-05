@@ -29,10 +29,21 @@ This application goes far beyond basic messaging, implementing a full suite of f
 - **Voice Notes:** Record and send audio messages directly from the chat window using your microphone.
 - **Avatar Cropping:** Upload and perfectly crop circular profile pictures and group icons using an interactive cropping tool.
 
+### 🌟 Status Media Studio & 24-Hour Stories
+- **WhatsApp-Style Status Stories:** Share temporary photo, video, and rich text updates that automatically expire after 24 hours with view receipt timestamps and direct messaging reaction replies.
+- **Interactive Photo & Video Studio:** An all-in-one full-screen media editing suite that launches automatically before publishing:
+  - **Image Cropping & Rotation:** Custom cropping aspect ratios (Original, 9:16 story portrait, 1:1 square, 4:3) and instant 90° rotational transformations.
+  - **Pencil Doodling & Sketching:** Silky-smooth freehand drawing tool with customizable vibrant color palettes and adjustable stroke thicknesses (Fine, Medium, Marker) featuring OS-level hardware pointer locking (`setPointerCapture`) for zero-latency drawing on laptop touchpads, touchscreens, and mice.
+  - **Sticker & Text Overlays:** Stamp floating, draggable emojis and custom styled typography banners directly onto pictures and videos with click-to-resize bounding selection frames and two-finger zoom scaling.
+  - **Video Trimming Sliders:** Precision dual-handle range slider enabling exact start and end timestamp trimming within loop intervals alongside native playback controls across MP4, WebM, MOV, AVI, MKV, and 3GP formats.
+- **Status Notification Counts:** Real-time badge indicator counters alerting users whenever contacts publish new unviewed stories.
+
 ### 🎨 User Experience
-- **Dark & Light Mode:** Toggle between beautifully crafted light and dark themes that mirror WhatsApp's design.
-- **Emoji Support:** Full emoji picker integration for messages.
-- **Responsive Design:** A fluid UI that works flawlessly on different screen sizes.
+- **Custom Glassmorphic Popups & Modals:** Universal custom-styled confirmation dialogs, blurred backdrops, and interactive notification toasts that completely replace native browser alert windows.
+- **Professional Lucide Icon Design:** Enterprise-grade vector icon architecture providing clean, crisp iconography across headers, menus, attachment pickers, and navigation bars.
+- **Dark & Light Mode:** Toggle between beautifully crafted light and dark themes that mirror WhatsApp's modern design tokens.
+- **WhatsApp-Style Media Picker (Emojis, GIFs & Stickers):** Features a multi-tabbed media popup window with a bottom floating pill switcher to easily send Emojis, live trending GIFs (powered by GIPHY API), and transparent animated Stickers with custom category filtering.
+- **Responsive Design:** A fluid UI that works flawlessly on different screen sizes from desktops to mobile devices.
 
 ## Tech Stack & Packages Used
 
@@ -55,7 +66,8 @@ The frontend is a modern single-page React application powered by the Vite build
 - **react-router-dom (7.18.2):** Handles navigation between different pages (like Login, Register, and the main Chat Layout).
 - **axios (1.18.1):** A powerful HTTP client used to send API requests to the Django backend.
 - **vite (8.1.1):** The extremely fast build tool and development server running the frontend environment.
-- **emoji-picker-react:** Provides the interactive emoji picker menu in the chat input.
+- **emoji-picker-react (4.19.1):** Provides the fast virtualized emoji scrolling grid in Tab 1 of the multi-tabbed chat media picker.
+- **GIPHY Media REST API Integration:** Instead of importing heavy third-party vendor UI bundles (like `@giphy/react-components` or `gif-picker-react`), the application directly queries Giphy's public trending and searching REST endpoints (`api.giphy.com/v1/gifs` and `api.giphy.com/v1/stickers`) via native browser `fetch`. This zero-dependency design allowed building the custom WhatsApp-style floating bottom switch bar while keeping the production build exceptionally fast and lightweight.
 
 ## How to Run the Application
 
@@ -106,6 +118,23 @@ This application utilizes native WebRTC (Web Real-Time Communication) to provide
 3. **Receiving the Call (Callee)**: The receiving user's frontend gets the WebSocket event. A full-screen "Incoming Call" overlay rings. If they click "Accept", they grant media permissions and generate an SDP "Answer", which is sent back over WebSockets.
 4. **ICE Candidate Exchange**: Simultaneously, both browsers use STUN servers (like Google's public STUN servers) to discover their own public IP addresses (ICE candidates). These IP addresses are rapidly exchanged through the WebSocket signaling server so the two devices know how to reach each other over the internet.
 5. **Direct Peer-to-Peer Connection**: Once the SDP and ICE data is successfully exchanged, the WebSocket signaling is complete. A direct, encrypted, peer-to-peer WebRTC connection is established between the two users. Video and audio stream directly from computer to computer, bypassing the backend server entirely for maximum privacy and zero latency!
+
+## Media Picker Architecture: Emojis, GIFs & Stickers
+
+To deliver an authentic WhatsApp-style messaging experience without bloating the application bundle size, the media selection system in `MediaPicker.jsx` combines dedicated lightweight libraries with native API integrations:
+
+1. **Tabbed Bottom Switcher (WhatsApp UI Pattern)**: A floating dark pill container anchored at the bottom center of the pop-up modal lets users instantly switch between Emojis (`😀`), GIFs (`GIF`), and animated Stickers (`📄`).
+2. **Emoji Tab**: Powered by `emoji-picker-react` for instant offline rendering of Unicode standard emojis.
+3. **GIF & Sticker Tabs (Zero-Dependency API Design)**:
+   - Uses native asynchronous `fetch()` calls to GIPHY's Media REST API endpoints (`/v1/gifs/trending`, `/v1/gifs/search`, `/v1/stickers/trending`, `/v1/stickers/search`).
+   - Includes instant keyword search bars with debouncing and interactive category filtering chips (*Trending*, *Love*, *Funny*, *Party*, *Pets*).
+   - **Resilient Fallback Design**: If the device is offline or the network is constrained, the component immediately falls back to a curated collection of high-definition animated media URLs, ensuring zero loading errors.
+4. **Native Chat Display & Previews**: When selected, GIFs render in custom rounded media bubbles while Stickers render as transparent floating icons. The left navigation conversation feed and message replies cleanly represent these items with specific badges (`🎞️ GIF` and `🏷️ Sticker`).
+
+### Alternative Third-Party Packages
+For developers looking to integrate standalone off-the-shelf vendor UI components instead of a custom multi-tabbed interface, the industry standard npm alternatives include:
+- **`gif-picker-react`**: A ready-made modal powered by Google's Tenor GIF repository (`npm i gif-picker-react`).
+- **`@giphy/react-components` + `@giphy/js-fetch-api`**: The official Giphy SDK providing automatic responsive masonry layout grids (`npm i @giphy/react-components @giphy/js-fetch-api`).
 
 ## Testing with Friends over the Internet (No Deploy Required!)
 

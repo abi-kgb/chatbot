@@ -1,28 +1,46 @@
-Category,Feature Name,Description
-Security,App Lock,Custom passcode lock screen with auto-lock on inactivity
-Security,Block System,Ability to block and unblock specific users
-Privacy,WhatsApp-Style Contacts,Privacy-first address book that hides usernames of non-contacts
-Messaging,Real-time Messaging,Instant 1-on-1 and group text messaging via WebSockets
-Messaging,Group Chats,Create groups with custom avatars, member management, and admin roles
-Messaging,Reply,Quote specific previous messages in your responses
-Messaging,Forward,Share messages and media to other chats or groups
-Messaging,Delete Messages,Delete messages for everyone (leaves a tombstone marker)
-Messaging,Bulk Actions,Select multiple messages to forward or delete at once
-Messaging,Voice Notes,Record and send audio messages directly from the chat window
+Category,Feature Name,Description,,,
+Security,App Lock,Custom passcode lock screen with auto-lock on inactivity,,,
+Security,Block System,Ability to block and unblock specific users,,,
+Privacy,WhatsApp-Style Contacts,Privacy-first address book that hides usernames of non-contacts,,,
+Messaging,Real-time Messaging,Instant 1-on-1 and group text messaging via WebSockets,,,
+Messaging,Group Chats,Create groups with custom avatars, member management, and admin roles,
+Messaging,Group Join Requests,Non-admin participants submit formal add-member approval requests into the group chat feed,,,
+Messaging,Group Admin Management,Admins can approve/reject member join requests and promote/demote participants to Admin status,,,
+Messaging,Animated GIFs & Stickers,Category-specific reaction GIF packs and expressive sticker sets with auto-fallback support,,,
+Messaging,Reply,Quote specific previous messages in your responses,,,
+Messaging,Forward,Share messages and media to other chats or groups,,,
+Messaging,Delete Messages,Delete messages for everyone (leaves a tombstone marker),,,
+Messaging,Bulk Actions,Select multiple messages to forward or delete at once,,,
+Messaging,Voice Notes,Record and send audio messages directly from the chat window,,,
 Messaging,Media Attachments,Send images, videos, audio files, and PDFs
-Chat Management,Pin Chats,Pin important conversations to the top of the chat list
-Chat Management,Favourite Chats,Mark specific chats as favourites for quick access
-Chat Management,Archive Chats,Hide old chats from the main view into an Archived folder
-Chat Management,Mute Notifications,Mute alerts for specific chats or groups
-Chat Management,In-Chat Search,Search for specific text history within a conversation
-Status & Receipts,Read Receipts,WhatsApp-style checkmarks (sent, delivered, read)
-Status & Receipts,Typing Indicators,Real-time 'Typing...' animations
-Status & Receipts,Online Status,Live 'Online' or 'Last Seen' timestamps
-Calls,Voice Calls,High-quality peer-to-peer WebRTC audio calling
-Calls,Video Calls,Real-time peer-to-peer WebRTC video calling
-Calls,Call Management,Incoming call ringing overlay and dedicated Call History tab
-UI & UX,Responsive Design,Seamless layout that adapts from Desktop to Mobile screens
-UI & UX,Dark & Light Mode,Toggle between beautifully crafted light and dark themes
-UI & UX,Emoji Support,Full interactive emoji picker integration
-UI & UX,Avatar Cropping,Interactive tool to perfectly crop profile pictures in a circle
-UI & UX,Scroll to Bottom,Floating arrow button to instantly jump to the newest messages
+Messaging,File Size Limits,Enforces maximum upload limits of 50 MB for videos/media and 100 MB for documents,,,
+Chat Management,Pin Chats,Pin important conversations to the top of the chat list,,,
+Chat Management,Favourite Chats,Mark specific chats as favourites for quick access,,,
+Chat Management,Archive Chats,Hide old chats from the main view into an Archived folder,,,
+Chat Management,Mute Notifications,Mute alerts for specific chats or groups,,,
+Chat Management,In-Chat Search,Search for specific text history within a conversation,,,
+Status & Receipts,Read Receipts,WhatsApp-style checkmarks (sent, delivered, read),
+Status & Receipts,Typing Indicators,Real-time 'Typing...' animations,,,
+Status & Receipts,Online Status,Live 'Online' or 'Last Seen' timestamps,,,
+Status & Receipts,24-Hour Stories (Status),Post temporary photos/videos or rich text status updates that expire after 24 hours,,,
+Status & Receipts,Status View Receipts,Live timestamped list showing exactly which contacts have watched your status,,,
+Status & Receipts,Status Reactions & Replies,React to contact stories with emojis or replies that generate a quoted direct message in 1-on-1 chat,,,
+Status & Receipts,Delete Status,Instantly delete any of your own uploaded status updates before the 24-hour expiration,,,
+Status & Receipts,Status Notification Badges,Live unviewed story notification count badge on the Status navigation icon and updates header,,,
+Calls,Voice Calls,High-quality peer-to-peer WebRTC audio calling,,,
+Calls,Video Calls,Real-time peer-to-peer WebRTC video calling,,,
+Calls,Call Management,Incoming call ringing overlay and dedicated Call History tab,,,
+Calls,Call Status Notifications,Color-coded call logs representing answered call durations (green) and missed calls (red),,,
+UI & UX,Responsive Design,Seamless layout that adapts from Desktop to Mobile screens,,,
+UI & UX,Dark & Light Mode,Toggle between beautifully crafted light and dark themes,,,
+UI & UX,Emoji Support,Full interactive emoji picker integration,,,
+UI & UX,In-Chat Action Cards,Dedicated interactive UI notification cards inside the chat stream for real-time group actions,,,
+UI & UX,Avatar Cropping,Interactive tool to perfectly crop profile pictures in a circle,,,
+UI & UX,Scroll to Bottom,Floating arrow button to instantly jump to the newest messages,,,
+UI & UX,Custom Popup Modal System,Universal WhatsApp-styled glassmorphic popup dialogs and confirmation modals replacing native browser alerts,,,
+UI & UX,Professional Icon System,Comprehensive migration from basic emojis and raw SVGs to standard industry lucide-react vector icons across navigation, headers, inputs, and menus
+UI & UX,Compact Single-Page Status Viewer,Resized WhatsApp-style story viewing dialog (340x460px) enabling seamless viewing, emoji reacting, and direct replying on a single page without scrolling,
+Status & Receipts,Status Image Studio (Crop & Rotate),Interactive cropping ratios (Free, 9:16 story ratio, 1:1 square, 4:3) and 90-degree instant image rotation before posting status
+Status & Receipts,Status Image Doodle & Pencil,Freehand custom drawing tool over status photos featuring a vibrant color palette selector and adjustable stroke thickness (Thin to Marker) with Undo functionality,,,
+Status & Receipts,Status Emoji Stickers & Text Overlays,Place interactive draggable emoji stickers and custom colorful styled text banners directly onto status pictures and video updates,,,
+Status & Receipts,Status Video Trimming & Cut Loop,Precision dual-slider video range trimmer allowing users to cut start/end timestamps within a 30-second loop interval and view real-time playback previews before publishing,,,

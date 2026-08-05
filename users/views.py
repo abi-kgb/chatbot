@@ -59,8 +59,8 @@ class UserSearchView(generics.ListAPIView):
     def get_queryset(self):
         query = self.request.query_params.get('q', '')
         if query:
-            return User.objects.filter(phone_number__icontains=query) | User.objects.filter(username__icontains=query)
-        return User.objects.none()
+            return (User.objects.filter(phone_number__icontains=query) | User.objects.filter(username__icontains=query)).exclude(id=self.request.user.id)
+        return User.objects.exclude(id=self.request.user.id)[:50]
 
 from rest_framework.views import APIView
 from django.utils import timezone

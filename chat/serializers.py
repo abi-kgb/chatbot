@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Conversation, Message, Group, GroupMember, GroupMessage, Call, PollVote
+from .models import Conversation, Message, Group, GroupMember, GroupMessage, Call, PollVote, Status, StatusView
 from users.serializers import UserSerializer
 
 class MessageSerializer(serializers.ModelSerializer):
@@ -15,7 +15,7 @@ class MessageSerializer(serializers.ModelSerializer):
     def get_poll_votes(self, obj):
         if obj.message_type == 'poll':
             votes = obj.votes.all()
-            return [{'user_id': v.user.id, 'option_id': v.option_id} for v in votes]
+            return [{'user_id': v.user.id, 'option_id': v.option_id, 'user': UserSerializer(v.user, context=self.context).data} for v in votes]
         return None
 
     def get_replied_to(self, obj):
@@ -28,6 +28,20 @@ class MessageSerializer(serializers.ModelSerializer):
                 'has_file': bool(obj.reply_to.file)
             }
         return None
+
+    def validate_file(self, value):
+        if value:
+            content_type = getattr(value, 'content_type', '')
+            size = getattr(value, 'size', 0)
+            is_media = content_type.startswith('video/') or content_type.startswith('audio/') or content_type.startswith('image/')
+            max_media_size = 50 * 1024 * 1024  # 50 MB
+            max_doc_size = 100 * 1024 * 1024   # 100 MB
+
+            if is_media and size > max_media_size:
+                raise serializers.ValidationError("Media file size exceeds the 50 MB limit.")
+            if not is_media and size > max_doc_size:
+                raise serializers.ValidationError("Document size exceeds the 100 MB limit.")
+        return value
 
 class ConversationSerializer(serializers.ModelSerializer):
     participants = UserSerializer(many=True, read_only=True)
@@ -109,7 +123,7 @@ class GroupMessageSerializer(serializers.ModelSerializer):
     def get_poll_votes(self, obj):
         if obj.message_type == 'poll':
             votes = obj.votes.all()
-            return [{'user_id': v.user.id, 'option_id': v.option_id} for v in votes]
+            return [{'user_id': v.user.id, 'option_id': v.option_id, 'user': UserSerializer(v.user, context=self.context).data} for v in votes]
         return None
 
     def get_replied_to(self, obj):
@@ -122,6 +136,20 @@ class GroupMessageSerializer(serializers.ModelSerializer):
                 'has_file': bool(obj.reply_to.file)
             }
         return None
+
+    def validate_file(self, value):
+        if value:
+            content_type = getattr(value, 'content_type', '')
+            size = getattr(value, 'size', 0)
+            is_media = content_type.startswith('video/') or content_type.startswith('audio/') or content_type.startswith('image/')
+            max_media_size = 50 * 1024 * 1024  # 50 MB
+            max_doc_size = 100 * 1024 * 1024   # 100 MB
+
+            if is_media and size > max_media_size:
+                raise serializers.ValidationError("Media file size exceeds the 50 MB limit.")
+            if not is_media and size > max_doc_size:
+                raise serializers.ValidationError("Document size exceeds the 100 MB limit.")
+        return value
 
 class GroupSerializer(serializers.ModelSerializer):
     members = GroupMemberSerializer(many=True, read_only=True)
@@ -184,4 +212,27 @@ class CallSerializer(serializers.ModelSerializer):
         model = Call
         fields = ('id', 'caller', 'receiver', 'is_video', 'status', 'duration', 'timestamp')
         read_only_fields = ('caller',)
+
+class StatusViewSerializer(serializers.ModelSerializer):
+    viewer = UserSerializer(read_only=True)
+
+    class Meta:
+        model = StatusView
+        fields = ('id', 'status', 'viewer', 'viewed_at')
+
+class StatusSerializer(serializers.ModelSerializer):
+    user = UserSerializer(read_only=True)
+    views = StatusViewSerializer(many=True, read_only=True)
+    is_viewed = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Status
+        fields = ('id', 'user', 'content', 'file', 'bg_color', 'metadata', 'created_at', 'views', 'is_viewed')
+        read_only_fields = ('user', 'views')
+
+    def get_is_viewed(self, obj):
+        request = self.context.get('request')
+        if request and request.user.is_authenticated:
+            return obj.views.filter(viewer=request.user).exists()
+        return False
 

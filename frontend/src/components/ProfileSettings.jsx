@@ -1,8 +1,11 @@
 import { useState } from 'react';
 import api, { getMediaUrl } from '../api';
 import AvatarCropperModal from './AvatarCropperModal';
+import { useAlert } from '../contexts/AlertContext';
+import { X } from 'lucide-react';
 
 function ProfileSettings({ user, setUser, onClose, onRequestAppLock, onLogout }) {
+  const { showAlert } = useAlert();
   const [statusMessage, setStatusMessage] = useState(user?.status_message || '');
   const [username, setUsername] = useState(user?.username || '');
   const [newPassword, setNewPassword] = useState('');
@@ -49,7 +52,7 @@ function ProfileSettings({ user, setUser, onClose, onRequestAppLock, onLogout })
       onClose();
     } catch (err) {
       console.error('Failed to update profile', err);
-      alert('Failed to update profile.');
+      showAlert('Error', 'Failed to update profile.');
     } finally {
       setIsSaving(false);
     }
@@ -69,7 +72,7 @@ function ProfileSettings({ user, setUser, onClose, onRequestAppLock, onLogout })
       }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
           <h2 style={{ margin: 0, color: 'var(--text-primary)' }}>Profile Settings</h2>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: '20px', cursor: 'pointer', color: 'var(--text-secondary)' }}>✕</button>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center' }}><X size={22} /></button>
         </div>
 
         <form onSubmit={handleSave}>
@@ -215,7 +218,7 @@ function ProfileSettings({ user, setUser, onClose, onRequestAppLock, onLogout })
       {fullscreenImage && (
         <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: 'rgba(0,0,0,0.9)', zIndex: 1100, display: 'flex', justifyContent: 'center', alignItems: 'center', cursor: 'zoom-out' }} onClick={() => setFullscreenImage(null)}>
           <img src={fullscreenImage} alt="Preview" style={{ width: '90%', height: 'auto', maxWidth: '400px', aspectRatio: '1 / 1', objectFit: 'cover', borderRadius: '50%' }} />
-          <div style={{ position: 'absolute', top: '20px', right: '30px', color: 'white', fontSize: '30px', cursor: 'pointer' }}>✖</div>
+          <div style={{ position: 'absolute', top: '20px', right: '30px', color: 'white', cursor: 'pointer' }}><X size={32} /></div>
         </div>
       )}
       {cropImageSrc && (

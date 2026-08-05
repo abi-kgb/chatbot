@@ -3,8 +3,8 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from django.db.models import Q
-from .models import Conversation, Message, Group, GroupMember, GroupMessage, Call
-from .serializers import ConversationSerializer, MessageSerializer, GroupSerializer, GroupMessageSerializer, GroupMemberSerializer, CallSerializer
+from .models import Conversation, Message, Group, GroupMember, GroupMessage, Call, Status, StatusView
+from .serializers import ConversationSerializer, MessageSerializer, GroupSerializer, GroupMessageSerializer, GroupMemberSerializer, CallSerializer, StatusSerializer, StatusViewSerializer
 
 class ConversationViewSet(viewsets.ModelViewSet):
     serializer_class = ConversationSerializer
@@ -28,8 +28,9 @@ class ConversationViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         self.perform_create(serializer)
-        headers = self.get_success_headers(serializer.data)
-        return Response(serializer.data, status=status.HTTP_201_CREATED)
+        response_serializer = self.get_serializer(serializer.instance)
+        headers = self.get_success_headers(response_serializer.data)
+        return Response(response_serializer.data, status=status.HTTP_201_CREATED, headers=headers)
 
     def perform_create(self, serializer):
         conversation = serializer.save()
@@ -201,14 +202,15 @@ class MessageViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['post'])
     def vote_poll(self, request, pk=None, conversation_pk=None):
         message = self.get_object()
-        if message.message_type != 'poll' or not message.metadata or not message.metadata.get('poll'):
+        if message.message_type != 'poll' or not message.metadata:
             return Response({'error': 'Message is not a poll'}, status=status.HTTP_400_BAD_REQUEST)
 
         option_id = request.data.get('option_id')
         if not option_id:
             return Response({'error': 'Option ID is required'}, status=status.HTTP_400_BAD_REQUEST)
 
-        allow_multiple = message.metadata['poll'].get('allow_multiple', False)
+        poll_data = message.metadata.get('poll', message.metadata) if isinstance(message.metadata, dict) else {}
+        allow_multiple = poll_data.get('allow_multiple', False)
         
         from .models import PollVote
         
@@ -230,7 +232,7 @@ class MessageViewSet(viewsets.ModelViewSet):
                 'event': {'type': 'message_update', 'message': self.get_serializer(message).data}
             }
         )
-        return Response({'status': 'voted'})
+        return Response(self.get_serializer(message).data)
 
 class GroupViewSet(viewsets.ModelViewSet):
     serializer_class = GroupSerializer
@@ -291,6 +293,44 @@ class GroupViewSet(viewsets.ModelViewSet):
             User = get_user_model()
             try:
                 new_user = User.objects.get(id=user_id)
+                if group.members.filter(user=new_user).exists():
+                    return Response({'error': 'User is already a member of this group'}, status=status.HTTP_400_BAD_REQUEST)
+                
+                # Check if requester is group admin
+                requester_member = group.members.filter(user=request.user).first()
+                is_admin = (requester_member and requester_member.role == 'admin') or (request.user.is_superuser)
+                
+                if not is_admin:
+                    # Non-admin: send an add_request message to the group!
+                    req_msg = GroupMessage.objects.create(
+                        group=group,
+                        sender=request.user,
+                        message_type='add_request',
+                        content=f"{request.user.username} requested to add {new_user.username} to the group.",
+                        metadata={
+                            'target_user_id': new_user.id,
+                            'target_username': new_user.username,
+                            'requester_username': request.user.username,
+                            'status': 'pending'
+                        }
+                    )
+                    from channels.layers import get_channel_layer
+                    from asgiref.sync import async_to_sync
+                    channel_layer = get_channel_layer()
+                    async_to_sync(channel_layer.group_send)(
+                        f'chat_group_{group.id}',
+                        {
+                            'type': 'chat_message',
+                            'message': GroupMessageSerializer(req_msg).data
+                        }
+                    )
+                    return Response({
+                        'status': 'request sent',
+                        'added': False,
+                        'message': f'You are not an admin. An approval request to add {new_user.username} has been sent to the group admins!'
+                    }, status=status.HTTP_200_OK)
+
+                # Admin: add directly!
                 member, created = GroupMember.objects.get_or_create(group=group, user=new_user)
                 if created:
                     sys_msg = GroupMessage.objects.create(
@@ -309,10 +349,179 @@ class GroupViewSet(viewsets.ModelViewSet):
                             'message': GroupMessageSerializer(sys_msg).data
                         }
                     )
-                return Response({'status': 'member added'})
+                    async_to_sync(channel_layer.group_send)(
+                        f'chat_group_{group.id}',
+                        {
+                            'type': 'chat_event',
+                            'event': {
+                                'type': 'group_updated',
+                                'group': GroupSerializer(group).data
+                            }
+                        }
+                    )
+                return Response({'status': 'member added', 'added': True})
             except User.DoesNotExist:
                 return Response({'error': 'user not found'}, status=status.HTTP_404_NOT_FOUND)
         return Response({'error': 'user_id required'}, status=status.HTTP_400_BAD_REQUEST)
+
+    @action(detail=True, methods=['post'])
+    def handle_add_request(self, request, pk=None):
+        group = self.get_object()
+        message_id = request.data.get('message_id')
+        action_type = request.data.get('action') # 'approve' or 'reject'
+        
+        # Verify caller is an admin
+        requester_member = group.members.filter(user=request.user).first()
+        if not (requester_member and requester_member.role == 'admin') and not request.user.is_superuser:
+            return Response({'error': 'Only group admins can approve or reject add requests!'}, status=status.HTTP_403_FORBIDDEN)
+            
+        try:
+            msg = group.messages.get(id=message_id, message_type='add_request')
+        except GroupMessage.DoesNotExist:
+            return Response({'error': 'Add request message not found'}, status=status.HTTP_404_NOT_FOUND)
+            
+        metadata = msg.metadata or {}
+        if metadata.get('status') != 'pending':
+            return Response({'error': 'This request has already been processed!'}, status=status.HTTP_400_BAD_REQUEST)
+            
+        target_user_id = metadata.get('target_user_id')
+        target_username = metadata.get('target_username', 'User')
+        
+        from channels.layers import get_channel_layer
+        from asgiref.sync import async_to_sync
+        channel_layer = get_channel_layer()
+        
+        if action_type == 'approve':
+            from django.contrib.auth import get_user_model
+            User = get_user_model()
+            try:
+                new_user = User.objects.get(id=target_user_id)
+                GroupMember.objects.get_or_create(group=group, user=new_user)
+            except User.DoesNotExist:
+                return Response({'error': 'Target user no longer exists'}, status=status.HTTP_404_NOT_FOUND)
+                
+            metadata['status'] = 'approved'
+            msg.metadata = metadata
+            msg.save(update_fields=['metadata'])
+            
+            sys_msg = GroupMessage.objects.create(
+                group=group,
+                sender=request.user,
+                message_type='system',
+                content=f"Admin {request.user.username} approved adding {target_username} to the group."
+            )
+            
+            # Broadcast updated request card, system message, and group info!
+            async_to_sync(channel_layer.group_send)(
+                f'chat_group_{group.id}',
+                {
+                    'type': 'chat_message',
+                    'message': GroupMessageSerializer(msg).data
+                }
+            )
+            async_to_sync(channel_layer.group_send)(
+                f'chat_group_{group.id}',
+                {
+                    'type': 'chat_message',
+                    'message': GroupMessageSerializer(sys_msg).data
+                }
+            )
+            async_to_sync(channel_layer.group_send)(
+                f'chat_group_{group.id}',
+                {
+                    'type': 'chat_event',
+                    'event': {
+                        'type': 'group_updated',
+                        'group': GroupSerializer(group).data
+                    }
+                }
+            )
+            return Response({'status': 'approved'})
+        elif action_type == 'reject':
+            metadata['status'] = 'rejected'
+            msg.metadata = metadata
+            msg.save(update_fields=['metadata'])
+            
+            sys_msg = GroupMessage.objects.create(
+                group=group,
+                sender=request.user,
+                message_type='system',
+                content=f"Admin {request.user.username} rejected request to add {target_username}."
+            )
+            async_to_sync(channel_layer.group_send)(
+                f'chat_group_{group.id}',
+                {
+                    'type': 'chat_message',
+                    'message': GroupMessageSerializer(msg).data
+                }
+            )
+            async_to_sync(channel_layer.group_send)(
+                f'chat_group_{group.id}',
+                {
+                    'type': 'chat_message',
+                    'message': GroupMessageSerializer(sys_msg).data
+                }
+            )
+            return Response({'status': 'rejected'})
+        else:
+            return Response({'error': "Invalid action, must be 'approve' or 'reject'"}, status=status.HTTP_400_BAD_REQUEST)
+
+    @action(detail=True, methods=['post'])
+    def set_role(self, request, pk=None):
+        group = self.get_object()
+        user_id = request.data.get('user_id')
+        new_role = request.data.get('role') # 'admin' or 'member'
+        
+        if not user_id or new_role not in ['admin', 'member']:
+            return Response({'error': 'Valid user_id and role (admin/member) required'}, status=status.HTTP_400_BAD_REQUEST)
+            
+        # Verify caller is an admin
+        requester_member = group.members.filter(user=request.user).first()
+        if not (requester_member and requester_member.role == 'admin') and not request.user.is_superuser:
+            return Response({'error': 'Only group admins can change member roles!'}, status=status.HTTP_403_FORBIDDEN)
+            
+        try:
+            target_member = group.members.get(user_id=user_id)
+        except GroupMember.DoesNotExist:
+            return Response({'error': 'User is not a member of this group'}, status=status.HTTP_404_NOT_FOUND)
+            
+        if target_member.user.id == request.user.id:
+            return Response({'error': 'You cannot change your own admin status'}, status=status.HTTP_400_BAD_REQUEST)
+            
+        target_member.role = new_role
+        target_member.save(update_fields=['role'])
+        
+        action_desc = "promoted" if new_role == 'admin' else "demoted"
+        role_label = "to Group Admin" if new_role == 'admin' else "to regular participant"
+        
+        sys_msg = GroupMessage.objects.create(
+            group=group,
+            sender=request.user,
+            message_type='system',
+            content=f"Admin {request.user.username} {action_desc} {target_member.user.username} {role_label}."
+        )
+        
+        from channels.layers import get_channel_layer
+        from asgiref.sync import async_to_sync
+        channel_layer = get_channel_layer()
+        async_to_sync(channel_layer.group_send)(
+            f'chat_group_{group.id}',
+            {
+                'type': 'chat_message',
+                'message': GroupMessageSerializer(sys_msg).data
+            }
+        )
+        async_to_sync(channel_layer.group_send)(
+            f'chat_group_{group.id}',
+            {
+                'type': 'chat_event',
+                'event': {
+                    'type': 'group_updated',
+                    'group': GroupSerializer(group).data
+                }
+            }
+        )
+        return Response({'status': 'role updated', 'group': GroupSerializer(group).data})
 
     @action(detail=True, methods=['post'])
     def read(self, request, pk=None):
@@ -484,14 +693,15 @@ class GroupMessageViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['post'])
     def vote_poll(self, request, pk=None, group_pk=None):
         message = self.get_object()
-        if message.message_type != 'poll' or not message.metadata or not message.metadata.get('poll'):
+        if message.message_type != 'poll' or not message.metadata:
             return Response({'error': 'Message is not a poll'}, status=status.HTTP_400_BAD_REQUEST)
 
         option_id = request.data.get('option_id')
         if not option_id:
             return Response({'error': 'Option ID is required'}, status=status.HTTP_400_BAD_REQUEST)
 
-        allow_multiple = message.metadata['poll'].get('allow_multiple', False)
+        poll_data = message.metadata.get('poll', message.metadata) if isinstance(message.metadata, dict) else {}
+        allow_multiple = poll_data.get('allow_multiple', False)
         
         from .models import PollVote
         
@@ -513,7 +723,7 @@ class GroupMessageViewSet(viewsets.ModelViewSet):
                 'event': {'type': 'message_update', 'message': self.get_serializer(message).data}
             }
         )
-        return Response({'status': 'voted'})
+        return Response(self.get_serializer(message).data)
 
 class CallViewSet(viewsets.ModelViewSet):
     serializer_class = CallSerializer
@@ -526,14 +736,67 @@ class CallViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         receiver_id = self.request.data.get('receiver_id')
+        caller_id = self.request.data.get('caller_id')
         from django.contrib.auth import get_user_model
         User = get_user_model()
         try:
-            receiver = User.objects.get(id=receiver_id)
-            serializer.save(caller=self.request.user, receiver=receiver)
+            if caller_id and int(caller_id) != self.request.user.id:
+                caller = User.objects.get(id=caller_id)
+                receiver = self.request.user
+            else:
+                caller = self.request.user
+                receiver = User.objects.get(id=receiver_id)
+
+            # Deduplicate if either caller or receiver already logged this call in the last 15 seconds
+            from django.utils import timezone
+            import datetime
+            time_window = timezone.now() - datetime.timedelta(seconds=15)
+            existing_call = Call.objects.filter(
+                Q(caller=caller, receiver=receiver) | Q(caller=receiver, receiver=caller),
+                timestamp__gte=time_window
+            ).first()
+            if existing_call:
+                serializer.instance = existing_call
+                return
+
+            call = serializer.save(caller=caller, receiver=receiver)
+            
+            # Create inline WhatsApp-style notification message directly inside the chat conversation
+            conversation = Conversation.objects.filter(participants=caller).filter(participants=receiver).first()
+            if conversation:
+                is_video = call.is_video
+                status_str = call.status
+                dur = call.duration or 0
+                if status_str in ['missed', 'rejected', 'cancelled'] or (dur == 0 and status_str != 'ended'):
+                    text = 'Missed video call' if is_video else 'Missed voice call'
+                else:
+                    hours = dur // 3600
+                    mins = (dur % 3600) // 60
+                    secs = dur % 60
+                    parts = []
+                    if hours > 0: parts.append(f"{hours}h")
+                    if mins > 0 or hours > 0: parts.append(f"{mins}m")
+                    parts.append(f"{secs}s")
+                    dur_str = " ".join(parts)
+                    text = f"Video call · {dur_str}" if is_video else f"Voice call · {dur_str}"
+
+                message = Message.objects.create(
+                    conversation=conversation,
+                    sender=caller,
+                    content=text
+                )
+                from channels.layers import get_channel_layer
+                from asgiref.sync import async_to_sync
+                channel_layer = get_channel_layer()
+                if channel_layer:
+                    async_to_sync(channel_layer.group_send)(
+                        f'chat_conv_{conversation.id}',
+                        {
+                            'type': 'chat_message',
+                            'message': MessageSerializer(message, context={'request': self.request}).data
+                        }
+                    )
         except User.DoesNotExist:
-            pass # Return 400 ideally, but let's just let it fail or we should handle it.
-            # Actually, perform_create doesn't easily return 400 without raising ValidationError.
             from rest_framework.exceptions import ValidationError
             raise ValidationError({'receiver_id': 'Invalid user ID'})
 
@@ -616,3 +879,40 @@ def forward_message(request):
             )
 
     return Response({'status': 'forwarded'})
+
+class StatusViewSet(viewsets.ModelViewSet):
+    permission_classes = [permissions.IsAuthenticated]
+    serializer_class = StatusSerializer
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
+
+    def get_queryset(self):
+        from django.utils import timezone
+        from datetime import timedelta
+        twenty_four_hours_ago = timezone.now() - timedelta(hours=24)
+        return Status.objects.filter(created_at__gte=twenty_four_hours_ago).order_by('-created_at')
+
+    def perform_create(self, serializer):
+        metadata = self.request.data.get('metadata')
+        if metadata and isinstance(metadata, str):
+            import json
+            try:
+                metadata = json.loads(metadata)
+            except Exception:
+                metadata = {}
+            serializer.save(user=self.request.user, metadata=metadata)
+        else:
+            serializer.save(user=self.request.user)
+
+    def perform_destroy(self, instance):
+        if instance.user != self.request.user:
+            from rest_framework.exceptions import PermissionDenied
+            raise PermissionDenied("You can only delete your own status updates.")
+        instance.delete()
+
+    @action(detail=True, methods=['post'])
+    def view(self, request, pk=None):
+        status_obj = self.get_object()
+        if status_obj.user != request.user:
+            StatusView.objects.get_or_create(status=status_obj, viewer=request.user)
+        return Response({'status': 'ok', 'view_count': status_obj.views.count()})
+

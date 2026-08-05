@@ -1,8 +1,11 @@
 import { useState, useRef } from 'react';
 import api from '../api';
 import AvatarCropperModal from './AvatarCropperModal';
+import { useAlert } from '../contexts/AlertContext';
+import { X, Camera } from 'lucide-react';
 
 function CreateGroupModal({ onClose, onSuccess }) {
+  const { showAlert } = useAlert();
   const [groupName, setGroupName] = useState('');
   const [avatarFile, setAvatarFile] = useState(null);
   const [preview, setPreview] = useState(null);
@@ -38,7 +41,7 @@ function CreateGroupModal({ onClose, onSuccess }) {
       onSuccess(res.data);
     } catch (err) {
       console.error('Failed to create group', err);
-      alert('Failed to create group. Please try again.');
+      showAlert('Error', 'Failed to create group. Please try again.');
     } finally {
       setIsSubmitting(false);
     }
@@ -56,7 +59,7 @@ function CreateGroupModal({ onClose, onSuccess }) {
       }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
           <h2 style={{ margin: 0, color: 'var(--text-primary)' }}>New Group</h2>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: '20px', cursor: 'pointer', color: 'var(--text-secondary)' }}>✕</button>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center' }}><X size={22} /></button>
         </div>
 
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
@@ -72,8 +75,8 @@ function CreateGroupModal({ onClose, onSuccess }) {
               {preview ? (
                 <img src={preview} alt="Group preview" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
               ) : (
-                <div style={{ textAlign: 'center', color: 'var(--text-secondary)' }}>
-                  <div style={{ fontSize: '30px', marginBottom: '5px' }}>📷</div>
+                <div style={{ textAlign: 'center', color: 'var(--text-secondary)', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                  <div style={{ marginBottom: '5px' }}><Camera size={30} strokeWidth={1.8} /></div>
                   <div style={{ fontSize: '12px' }}>Add Photo</div>
                 </div>
               )}

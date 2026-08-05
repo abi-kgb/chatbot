@@ -6,6 +6,7 @@ import ChatLayout from './components/ChatLayout';
 import LockScreen from './components/LockScreen';
 import AppLockSetupModal from './components/AppLockSetupModal';
 import { ContactsProvider } from './contexts/ContactsContext';
+import { AlertProvider } from './contexts/AlertContext';
 import api from './api';
 
 function App() {
@@ -62,33 +63,35 @@ function App() {
   };
 
   return (
-    <Router>
-      <Routes>
-        <Route path="/login" element={
-          !isAuthenticated ? <Login onLogin={handleLogin} /> : <Navigate to="/" />
-        } />
-        <Route path="/register" element={
-          !isAuthenticated ? <Register onLogin={handleLogin} /> : <Navigate to="/" />
-        } />
-        <Route path="/" element={
-          isAuthenticated ? (
-            isAppLocked ? (
-              <LockScreen onUnlock={() => setIsAppLocked(false)} />
-            ) : (
-              <ContactsProvider user={user}>
-                <ChatLayout user={user} setUser={setUser} onLogout={handleLogout} onRequestAppLock={handleRequestAppLock} />
-              </ContactsProvider>
-            )
-          ) : <Navigate to="/login" />
-        } />
-      </Routes>
-      {showAppLockSetup && (
-        <AppLockSetupModal 
-          onClose={() => setShowAppLockSetup(false)} 
-          onSetupComplete={() => setIsAppLocked(true)} 
-        />
-      )}
-    </Router>
+    <AlertProvider>
+      <Router>
+        <Routes>
+          <Route path="/login" element={
+            !isAuthenticated ? <Login onLogin={handleLogin} /> : <Navigate to="/" />
+          } />
+          <Route path="/register" element={
+            !isAuthenticated ? <Register onLogin={handleLogin} /> : <Navigate to="/" />
+          } />
+          <Route path="/" element={
+            isAuthenticated ? (
+              isAppLocked ? (
+                <LockScreen onUnlock={() => setIsAppLocked(false)} />
+              ) : (
+                <ContactsProvider user={user}>
+                  <ChatLayout user={user} setUser={setUser} onLogout={handleLogout} onRequestAppLock={handleRequestAppLock} />
+                </ContactsProvider>
+              )
+            ) : <Navigate to="/login" />
+          } />
+        </Routes>
+        {showAppLockSetup && (
+          <AppLockSetupModal 
+            onClose={() => setShowAppLockSetup(false)} 
+            onSetupComplete={() => setIsAppLocked(true)} 
+          />
+        )}
+      </Router>
+    </AlertProvider>
   );
 }
 

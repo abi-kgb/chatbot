@@ -2,16 +2,28 @@ import { useState, useRef } from 'react';
 import api, { getMediaUrl } from '../api';
 import AvatarCropperModal from './AvatarCropperModal';
 import { useContacts } from '../contexts/ContactsContext';
+import { useAlert } from '../contexts/AlertContext';
+import { X, Camera, Check, Pencil, UserPlus, Plus } from 'lucide-react';
 
-function ContactInfo({ participant, group, onClose, onUpdateGroup }) {
+function ContactInfo({ participant, group, currentUser, onClose, onUpdateGroup }) {
+  const { showAlert, showConfirm } = useAlert();
   const [previewImage, setPreviewImage] = useState(null);
   const [isUploading, setIsUploading] = useState(false);
   const [cropImageSrc, setCropImageSrc] = useState(null);
   const [isEditingName, setIsEditingName] = useState(false);
   const [editName, setEditName] = useState('');
+  
+  // State for Add Member feature
+  const [showAddMember, setShowAddMember] = useState(false);
+  const [availableUsers, setAvailableUsers] = useState([]);
+  const [loadingUsers, setLoadingUsers] = useState(false);
+  const [addingUserId, setAddingUserId] = useState(null);
+
   const fileInputRef = useRef(null);
   const { contactsMap, addContact, updateContact, getDisplayName } = useContacts();
   const isGroup = !!group;
+  const currentMember = isGroup && group.members?.find(m => m.user?.id === currentUser?.id || m.user?.username === currentUser?.username);
+  const isCurrentUserAdmin = currentMember?.role === 'admin' || currentUser?.is_superuser;
   const name = isGroup ? group.name : getDisplayName(participant);
   const isContact = !isGroup && participant && contactsMap[participant.id];
   const avatar = isGroup ? group.avatar : participant?.avatar;
@@ -39,7 +51,7 @@ function ContactInfo({ participant, group, onClose, onUpdateGroup }) {
       setIsEditingName(false);
     } catch (err) {
       console.error('Failed to update name', err);
-      alert('Failed to update name.');
+      showAlert('Error', 'Failed to update name.');
     }
   };
 
@@ -67,9 +79,67 @@ function ContactInfo({ participant, group, onClose, onUpdateGroup }) {
       }
     } catch (err) {
       console.error('Failed to update group avatar', err);
-      alert('Failed to update group photo.');
+      showAlert('Error', 'Failed to update group photo.');
     } finally {
       setIsUploading(false);
+    }
+  };
+
+  const fetchAvailableUsers = async () => {
+    setLoadingUsers(true);
+    try {
+      const res = await api.get('users/search/?q=');
+      const currentMemberIds = (group?.members || []).map(m => m.user.id);
+      const filtered = (res.data || []).filter(u => !currentMemberIds.includes(u.id));
+      setAvailableUsers(filtered);
+    } catch (err) {
+      console.error('Failed to load users', err);
+    } finally {
+      setLoadingUsers(false);
+    }
+  };
+
+  const handleAddMember = async (targetUser) => {
+    setAddingUserId(targetUser.id);
+    try {
+      const res = await api.post(`chat/groups/${group.id}/add_member/`, { user_id: targetUser.id });
+      if (res.data && res.data.added === false) {
+        showAlert('👥 Approval Request Sent!', `You are not an admin of this group. A formal request to add ${targetUser.username} has been posted into the group chat for admins to approve or reject!`);
+        setShowAddMember(false);
+      } else {
+        showAlert('Success!', `✅ ${targetUser.username} added to the group successfully!`);
+        setShowAddMember(false);
+        // Refresh group members list if added directly
+        const groupRes = await api.get(`chat/groups/${group.id}/`);
+        if (onUpdateGroup && groupRes.data) {
+          onUpdateGroup(groupRes.data);
+        }
+      }
+    } catch (err) {
+      console.error('Failed to add member', err);
+      showAlert('Error', err.response?.data?.error || 'Failed to add member');
+    } finally {
+      setAddingUserId(null);
+    }
+  };
+
+  const handleToggleRole = async (targetMember) => {
+    const newRole = targetMember.role === 'admin' ? 'member' : 'admin';
+    const actionText = newRole === 'admin' ? `promote ${targetMember.user.username} to Group Admin?` : `demote ${targetMember.user.username} to regular participant?`;
+    const confirmed = await showConfirm('Change Role', `Are you sure you want to ${actionText}`, 'Yes, Confirm');
+    if (!confirmed) return;
+
+    try {
+      const res = await api.post(`chat/groups/${group.id}/set_role/`, {
+        user_id: targetMember.user.id,
+        role: newRole
+      });
+      if (res.data?.group && onUpdateGroup) {
+        onUpdateGroup(res.data.group);
+      }
+    } catch (err) {
+      console.error('Failed to change member role:', err);
+      showAlert('Error', err.response?.data?.error || 'Failed to update member role.');
     }
   };
 
@@ -81,17 +151,17 @@ function ContactInfo({ participant, group, onClose, onUpdateGroup }) {
     }}>
       <div style={{
         backgroundColor: 'var(--bg-primary)', padding: '30px', borderRadius: '12px',
-        width: '400px', maxWidth: '90%', boxShadow: '0 10px 30px rgba(0,0,0,0.2)'
+        width: '420px', maxWidth: '95%', maxHeight: '85vh', overflowY: 'auto', boxShadow: '0 10px 30px rgba(0,0,0,0.3)'
       }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
           <h2 style={{ margin: 0, color: 'var(--text-primary)' }}>{isGroup ? 'Group Info' : 'Contact Info'}</h2>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: '20px', cursor: 'pointer', color: 'var(--text-secondary)' }}>✕</button>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center' }}><X size={22} /></button>
         </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: '20px' }}>
           <div style={{
-            width: '150px', height: '150px', borderRadius: isGroup ? '16px' : '50%', backgroundColor: isGroup ? '#f59e0b' : 'var(--primary-color)',
-            display: 'flex', justifyContent: 'center', alignItems: 'center', fontSize: '60px', color: 'white',
+            width: '140px', height: '140px', borderRadius: isGroup ? '16px' : '50%', backgroundColor: isGroup ? '#f59e0b' : 'var(--primary-color)',
+            display: 'flex', justifyContent: 'center', alignItems: 'center', fontSize: '55px', color: 'white',
             overflow: 'hidden', marginBottom: '15px', position: 'relative', cursor: isGroup ? 'pointer' : 'default'
           }} onClick={() => {
             if (isGroup) {
@@ -116,9 +186,9 @@ function ContactInfo({ participant, group, onClose, onUpdateGroup }) {
             {isGroup && (
               <div style={{
                 position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: 'rgba(0,0,0,0.5)',
-                padding: '5px', fontSize: '14px', textAlign: 'center', color: 'white'
+                padding: '5px', fontSize: '13px', textAlign: 'center', color: 'white'
               }}>
-                {isUploading ? 'Uploading...' : '📷 Change'}
+                {isUploading ? 'Uploading...' : <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}><Camera size={15} /> Change</span>}
               </div>
             )}
             <input 
@@ -142,21 +212,15 @@ function ContactInfo({ participant, group, onClose, onUpdateGroup }) {
                   }}
                   autoFocus
                 />
-                <button onClick={handleUpdateName} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--primary-color)' }}>
-                  <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M9 16.2L4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4L9 16.2z"></path></svg>
+                <button onClick={handleUpdateName} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--primary-color)', display: 'flex', alignItems: 'center' }}>
+                  <Check size={20} strokeWidth={2.5} />
                 </button>
               </>
             ) : (
               <>
                 <h2 style={{ margin: 0, color: 'var(--text-primary)' }}>{name}</h2>
-                <button onClick={() => { setEditName(isContact ? isContact.saved_name : ''); setIsEditingName(true); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)' }} title={isGroup ? "Edit Group Name" : (isContact ? "Edit Contact" : "Add to Contacts")}>
-                  <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
-                    {isGroup || isContact ? (
-                      <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"></path>
-                    ) : (
-                      <path d="M15 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm-9-2V7H4v3H1v2h3v3h2v-3h3v-2H6zm9 4c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"></path>
-                    )}
-                  </svg>
+                <button onClick={() => { setEditName(isContact ? isContact.saved_name : ''); setIsEditingName(true); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center' }} title={isGroup ? "Edit Group Name" : (isContact ? "Edit Contact" : "Add to Contacts")}>
+                  {isGroup || isContact ? <Pencil size={18} strokeWidth={2.2} /> : <UserPlus size={18} strokeWidth={2.2} />}
                 </button>
               </>
             )}
@@ -164,28 +228,163 @@ function ContactInfo({ participant, group, onClose, onUpdateGroup }) {
           {!isGroup && <div style={{ color: 'var(--text-secondary)', fontSize: '15px', marginBottom: '15px' }}>{participant?.phone_number}</div>}
         </div>
 
-        <div style={{ backgroundColor: 'var(--bg-secondary)', padding: '15px', borderRadius: '8px' }}>
-          <label style={{ display: 'block', marginBottom: '5px', color: 'var(--text-secondary)', fontSize: '13px', fontWeight: 'bold' }}>
-            {isGroup ? `${group.members?.length} Participants` : 'About'}
-          </label>
+        <div style={{ backgroundColor: 'var(--bg-secondary)', padding: '16px', borderRadius: '10px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+            <label style={{ margin: 0, color: 'var(--text-secondary)', fontSize: '13px', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+              {isGroup ? `👥 Participants (${group.members?.length})` : 'About'}
+            </label>
+            {isGroup && (
+              <button
+                type="button"
+                onClick={() => {
+                  const toShow = !showAddMember;
+                  setShowAddMember(toShow);
+                  if (toShow) fetchAvailableUsers();
+                }}
+                style={{
+                  background: showAddMember ? '#ef4444' : '#00a884',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '20px',
+                  padding: '6px 14px',
+                  fontSize: '12px',
+                  fontWeight: '700',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  transition: 'all 0.2s',
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.25)'
+                }}
+              >
+                {showAddMember ? <span style={{ display: 'flex', alignItems: 'center', gap: '5px' }}><X size={15} /> Cancel</span> : <span style={{ display: 'flex', alignItems: 'center', gap: '5px' }}><UserPlus size={15} /> Add Member</span>}
+              </button>
+            )}
+          </div>
+
+          {/* Add Member Selection Area */}
+          {isGroup && showAddMember && (
+            <div style={{
+              marginBottom: '16px',
+              padding: '12px',
+              backgroundColor: 'var(--bg-primary)',
+              borderRadius: '8px',
+              border: '1px solid rgba(255,255,255,0.1)'
+            }}>
+              <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '10px', fontWeight: '600' }}>
+                Select a user to add (Admins add directly, others send an approval request):
+              </div>
+              {loadingUsers ? (
+                <div style={{ color: 'var(--text-secondary)', fontSize: '13px', textAlign: 'center', padding: '10px' }}>
+                  Loading contacts...
+                </div>
+              ) : availableUsers.length === 0 ? (
+                <div style={{ color: 'var(--text-secondary)', fontSize: '13px', textAlign: 'center', padding: '10px', fontStyle: 'italic' }}>
+                  No more contacts available to add.
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '180px', overflowY: 'auto' }}>
+                  {availableUsers.map(u => (
+                    <div key={u.id} style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      padding: '8px 10px',
+                      borderRadius: '6px',
+                      backgroundColor: 'rgba(255,255,255,0.04)'
+                    }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        <div style={{
+                          width: '32px', height: '32px', borderRadius: '50%', backgroundColor: '#00a884',
+                          display: 'flex', justifyContent: 'center', alignItems: 'center', color: 'white', fontWeight: 'bold', fontSize: '14px'
+                        }}>
+                          {u.avatar ? (
+                            <img src={getMediaUrl(u.avatar)} alt="avatar" style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} />
+                          ) : (
+                            u.username?.charAt(0).toUpperCase()
+                          )}
+                        </div>
+                        <div>
+                          <div style={{ fontSize: '14px', fontWeight: '600', color: 'var(--text-primary)' }}>{u.username}</div>
+                          <div style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>{u.phone_number || 'No phone'}</div>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        disabled={addingUserId === u.id}
+                        onClick={() => handleAddMember(u)}
+                        style={{
+                          backgroundColor: '#00a884',
+                          color: 'white',
+                          border: 'none',
+                          borderRadius: '14px',
+                          padding: '5px 12px',
+                          fontSize: '12px',
+                          fontWeight: 'bold',
+                          cursor: addingUserId === u.id ? 'wait' : 'pointer',
+                          opacity: addingUserId === u.id ? 0.6 : 1
+                        }}
+                      >
+                        {addingUserId === u.id ? 'Sending...' : <span style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>Add <Plus size={14} strokeWidth={2.5} /></span>}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
           <div style={{ color: 'var(--text-primary)', fontSize: '15px' }}>
             {isGroup ? (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginTop: '10px' }}>
-                {group.members?.map(member => (
-                  <div key={member.id} style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                    <div style={{ width: '36px', height: '36px', borderRadius: '50%', backgroundColor: 'var(--primary-color)', overflow: 'hidden', display: 'flex', justifyContent: 'center', alignItems: 'center', color: 'white', fontSize: '16px' }}>
-                      {member.user.avatar ? (
-                        <img src={getMediaUrl(member.user.avatar)} alt="avatar" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                      ) : (
-                        getDisplayName(member.user, true).charAt(0).toUpperCase()
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginTop: '4px' }}>
+                {group.members?.map(member => {
+                  const isSelf = member.user.id === currentUser?.id || member.user.username === currentUser?.username;
+                  return (
+                    <div key={member.id} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '6px 0', borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+                      <div style={{ width: '40px', height: '40px', borderRadius: '50%', backgroundColor: 'var(--primary-color)', overflow: 'hidden', display: 'flex', justifyContent: 'center', alignItems: 'center', color: 'white', fontSize: '17px', fontWeight: 'bold', flexShrink: 0 }}>
+                        {member.user.avatar ? (
+                          <img src={getMediaUrl(member.user.avatar)} alt="avatar" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                        ) : (
+                          getDisplayName(member.user, true).charAt(0).toUpperCase()
+                        )}
+                      </div>
+                      <div style={{ flex: 1, overflow: 'hidden' }}>
+                        <div style={{ fontWeight: '600', color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          {getDisplayName(member.user, true)}
+                          {isSelf && <span style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>(You)</span>}
+                        </div>
+                        {member.role === 'admin' ? (
+                          <div style={{ fontSize: '12px', color: '#00a884', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '4px', marginTop: '2px' }}>
+                            🛡️ Group Admin
+                          </div>
+                        ) : (
+                          <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '2px' }}>Participant</div>
+                        )}
+                      </div>
+                      {isCurrentUserAdmin && !isSelf && (
+                        <button
+                          type="button"
+                          onClick={() => handleToggleRole(member)}
+                          title={member.role === 'admin' ? 'Demote to regular participant' : 'Promote to Group Admin'}
+                          style={{
+                            background: member.role === 'admin' ? 'transparent' : 'rgba(0, 168, 132, 0.15)',
+                            color: member.role === 'admin' ? '#ef4444' : '#00a884',
+                            border: member.role === 'admin' ? '1px solid rgba(239, 68, 68, 0.4)' : '1px solid rgba(0, 168, 132, 0.4)',
+                            borderRadius: '16px',
+                            padding: '4px 10px',
+                            fontSize: '11px',
+                            fontWeight: '700',
+                            cursor: 'pointer',
+                            whiteSpace: 'nowrap',
+                            transition: 'all 0.2s'
+                          }}
+                        >
+                          {member.role === 'admin' ? '⬇️ Dismiss Admin' : '⬆️ Make Admin'}
+                        </button>
                       )}
                     </div>
-                    <div>
-                      <div style={{ fontWeight: '500' }}>{getDisplayName(member.user, true)}</div>
-                      {member.role === 'admin' && <div style={{ fontSize: '12px', color: 'var(--primary-color)' }}>Group Admin</div>}
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             ) : (
               status

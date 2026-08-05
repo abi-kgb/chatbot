@@ -107,3 +107,31 @@ class PollVote(models.Model):
 
     def __str__(self):
         return f"{self.user} voted for {self.option_id}"
+
+class Status(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='statuses')
+    content = models.TextField(blank=True, null=True)
+    file = models.FileField(upload_to='status_files/', null=True, blank=True)
+    bg_color = models.CharField(max_length=20, default='#0b141a')
+    metadata = models.JSONField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ('created_at',)
+
+    def __str__(self):
+        return f"Status by {self.user.username} at {self.created_at}"
+
+class StatusView(models.Model):
+    status = models.ForeignKey(Status, on_delete=models.CASCADE, related_name='views')
+    viewer = models.ForeignKey(User, on_delete=models.CASCADE, related_name='status_views')
+    viewed_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=['status', 'viewer'], name='unique_status_view')
+        ]
+        ordering = ('-viewed_at',)
+
+    def __str__(self):
+        return f"{self.viewer.username} viewed status {self.status.id}"
