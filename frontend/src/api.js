@@ -4,9 +4,9 @@ let defaultApiBase = '/api/';
 if (typeof window !== 'undefined' && window.location.host.includes('.onrender.com')) {
   const host = window.location.host;
   let backendDomain = host;
-  if (host.includes('frontend-')) {
-    // Convert frontend-tn8c.onrender.com -> whatsapp-clone-backend.onrender.com or whatsapp-clone-backend-tn8c.onrender.com
-    backendDomain = host.replace('frontend', 'whatsapp-clone-backend');
+  if (host.includes('frontend')) {
+    // Map whatsapp-clone-frontend-tn8c.onrender.com -> whatsapp-clone-backend-tn8c.onrender.com
+    backendDomain = host.replace('frontend', 'backend');
   }
   defaultApiBase = `${window.location.protocol}//${backendDomain}/api/`;
 }
@@ -55,8 +55,8 @@ export const getWebSocketUrl = (path) => {
 
   let host = window.location.host;
   if (host.includes('.onrender.com')) {
-    if (host.includes('frontend-')) {
-      host = host.replace('frontend', 'whatsapp-clone-backend');
+    if (host.includes('frontend')) {
+      host = host.replace('frontend', 'backend');
     }
   }
 
