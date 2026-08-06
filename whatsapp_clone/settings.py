@@ -154,10 +154,20 @@ MEDIA_ROOT = BASE_DIR / 'media'
 
 X_FRAME_OPTIONS = 'ALLOWALL'
 
-CORS_ALLOW_ALL_ORIGINS = True
-CORS_ALLOW_CREDENTIALS = True
+from corsheaders.defaults import default_headers, default_methods
 
-CORS_ALLOW_HEADERS = [
+CORS_ALLOW_ALL_ORIGINS = True
+CORS_ORIGIN_ALLOW_ALL = True
+CORS_ALLOW_CREDENTIALS = True
+CORS_ALLOW_METHODS = list(default_methods) + [
+    'DELETE',
+    'GET',
+    'OPTIONS',
+    'PATCH',
+    'POST',
+    'PUT',
+]
+CORS_ALLOW_HEADERS = list(default_headers) + [
     'accept',
     'accept-encoding',
     'authorization',
