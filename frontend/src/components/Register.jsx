@@ -58,7 +58,7 @@ function Register({ onLogin }) {
               name="username"
               value={formData.username} 
               onChange={handleChange} 
-              pattern="^[\w.@+-]+$"
+              pattern="[A-Za-z0-9@.+_-]+"
               title="Usernames can only contain letters, numbers, and @/./+/-/_ characters. No spaces allowed."
               required 
             />
