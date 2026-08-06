@@ -28,12 +28,19 @@ function Register({ onLogin }) {
       onLogin(res.data.access);
     } catch (err) {
       if (err.response && err.response.data) {
-        // Extract the first error message from the response object
-        const firstError = Object.values(err.response.data)[0];
-        const errorMessage = Array.isArray(firstError) ? firstError[0] : firstError;
-        setError(errorMessage || 'Registration failed. Please try again.');
+        if (typeof err.response.data === 'string') {
+          setError(err.response.data);
+        } else if (typeof err.response.data === 'object') {
+          const messages = Object.entries(err.response.data).map(([field, msgs]) => {
+            const msgStr = Array.isArray(msgs) ? msgs.join(', ') : String(msgs);
+            return `${field}: ${msgStr}`;
+          });
+          setError(messages.join(' | ') || 'Registration failed.');
+        } else {
+          setError('Registration failed. Please try again.');
+        }
       } else {
-        setError('Registration failed. Please try again.');
+        setError('Server is spinning up or offline. Please wait 10 seconds and try again.');
       }
     }
   };
@@ -92,13 +99,13 @@ function Register({ onLogin }) {
             </div>
           </div>
           <div className="input-group">
-            <label>Phone Number</label>
+            <label>Phone Number (Optional)</label>
             <input 
               type="text" 
               name="phone_number"
               value={formData.phone_number} 
               onChange={handleChange} 
-              required
+              placeholder="e.g. +123456789 (optional)"
             />
           </div>
           <button type="submit" className="btn-primary">Sign Up</button>
