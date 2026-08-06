@@ -23,18 +23,29 @@ function App() {
   useEffect(() => {
     let intervalId;
     if (isAuthenticated) {
-      api.get('users/me/')
-        .then(res => {
-          setUser(res.data);
-          api.post('users/heartbeat/').catch(() => {});
-          intervalId = setInterval(() => {
+      const fetchUser = () => {
+        api.get('users/me/')
+          .then(res => {
+            setUser(res.data);
             api.post('users/heartbeat/').catch(() => {});
-          }, 10000);
-        })
-        .catch(() => {
-          localStorage.removeItem('access_token');
-          setIsAuthenticated(false);
-        });
+            if (!intervalId) {
+              intervalId = setInterval(() => {
+                api.post('users/heartbeat/').catch(() => {});
+              }, 10000);
+            }
+          })
+          .catch((err) => {
+            if (err.response && (err.response.status === 401 || err.response.status === 403)) {
+              localStorage.removeItem('access_token');
+              setIsAuthenticated(false);
+              setUser(null);
+            } else {
+              // Retry in 3s if backend is waking up or temporary network delay
+              setTimeout(fetchUser, 3000);
+            }
+          });
+      };
+      fetchUser();
     }
     return () => {
       if (intervalId) clearInterval(intervalId);
