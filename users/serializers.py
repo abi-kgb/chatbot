@@ -21,21 +21,27 @@ class UserSerializer(serializers.ModelSerializer):
 
 class RegisterSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True, min_length=4)
-    phone_number = serializers.CharField(required=False, allow_blank=True)
+    phone_number = serializers.CharField(required=True, allow_blank=False)
 
     class Meta:
         model = User
         fields = ('username', 'password', 'phone_number', 'status_message')
+        extra_kwargs = {
+            'phone_number': {
+                'required': True,
+                'allow_blank': False,
+                'error_messages': {
+                    'blank': 'Phone number is mandatory.',
+                    'required': 'Phone number is mandatory.'
+                }
+            }
+        }
 
     def create(self, validated_data):
-        import uuid
-        phone = validated_data.get('phone_number')
-        if not phone or not phone.strip():
-            phone = f"+1{uuid.uuid4().hex[:10]}"
         user = User.objects.create_user(
             username=validated_data['username'],
             password=validated_data['password'],
-            phone_number=phone,
+            phone_number=validated_data['phone_number'].strip(),
             status_message=validated_data.get('status_message', 'Hey there! I am using WhatsApp Clone.')
         )
         return user

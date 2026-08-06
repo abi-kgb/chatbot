@@ -99,14 +99,18 @@ function Register({ onLogin }) {
             </div>
           </div>
           <div className="input-group">
-            <label>Phone Number (Optional)</label>
+            <label>Phone Number (Mandatory & Unique)</label>
             <input 
               type="text" 
               name="phone_number"
               value={formData.phone_number} 
               onChange={handleChange} 
-              placeholder="e.g. +123456789 (optional)"
+              placeholder="e.g. +919876543210"
+              required
             />
+            <small style={{ color: 'var(--text-secondary)', fontSize: '12px', marginTop: '4px', display: 'block' }}>
+              Must be a unique phone number.
+            </small>
           </div>
           <button type="submit" className="btn-primary">Sign Up</button>
         </form>
