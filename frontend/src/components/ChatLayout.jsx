@@ -6,7 +6,7 @@ import ChatWindow from './ChatWindow';
 import ProfileSettings from './ProfileSettings';
 import CallOverlay from './CallOverlay';
 import CreateGroupModal from './CreateGroupModal';
-import api from '../api';
+import api, { getWebSocketUrl } from '../api';
 import { useContacts } from '../contexts/ContactsContext';
 import { useAlert } from '../contexts/AlertContext';
 import { MessageCircle, PhoneCall, CircleDot, Users, Star, Settings } from 'lucide-react';
@@ -106,8 +106,7 @@ function ChatLayout({ user, setUser, onLogout, onRequestAppLock }) {
 
   useEffect(() => {
     if (!user) return;
-    const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const ws = new WebSocket(`${wsProtocol}//${window.location.host}/ws/global/${user.id}/`);
+    const ws = new WebSocket(getWebSocketUrl(`/ws/global/${user.id}/`));
     globalWsRef.current = ws;
 
     ws.onmessage = (e) => {

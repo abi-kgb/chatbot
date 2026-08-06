@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import api, { getMediaUrl } from '../api';
+import api, { getMediaUrl, getWebSocketUrl } from '../api';
 import ContactInfo from './ContactInfo';
 import VoiceMessagePlayer from './VoiceMessagePlayer';
 import AttachmentMenu from './AttachmentMenu';
@@ -152,8 +152,7 @@ function ChatWindow({ user, chat, onUpdateChat, onLogout, onStartCall, conversat
     
     // Setup WebSocket
     const roomName = isGroup ? `group_${chat.id}` : `conv_${chat.id}`;
-    const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const ws = new WebSocket(`${wsProtocol}//${window.location.host}/ws/chat/${roomName}/`);
+    const ws = new WebSocket(getWebSocketUrl(`/ws/chat/${roomName}/`));
     wsRef.current = ws;
 
     ws.onmessage = (e) => {
