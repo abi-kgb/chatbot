@@ -80,8 +80,10 @@ AUTH_USER_MODEL = 'users.User'
 LOGIN_URL = 'users:login'
 LOGIN_REDIRECT_URL = 'chat:index'
 
-# Database configuration: Use DATABASE_URL if available (Render), fallback to MySQL/SQLite
+# Database configuration: Use DATABASE_URL if available (Render), fallback to SQLite on Render or MySQL on local
 DATABASE_URL = os.environ.get('DATABASE_URL')
+IS_RENDER = 'RENDER' in os.environ or 'RENDER_SERVICE_ID' in os.environ
+
 if DATABASE_URL:
     DATABASES = {
         'default': dj_database_url.config(
@@ -89,6 +91,13 @@ if DATABASE_URL:
             conn_max_age=600,
             conn_health_checks=True,
         )
+    }
+elif IS_RENDER:
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / 'db.sqlite3',
+        }
     }
 else:
     try:
