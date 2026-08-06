@@ -10,6 +10,7 @@ class Conversation(models.Model):
     muted_by = models.ManyToManyField(User, related_name='muted_conversations', blank=True)
     archived_by = models.ManyToManyField(User, related_name='archived_conversations', blank=True)
     deleted_by = models.ManyToManyField(User, related_name='deleted_conversations', blank=True)
+    disappearing_duration = models.IntegerField(default=0) # 0=Off, 86400=24h, 604800=7d, 2592000=30d
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -28,6 +29,7 @@ class Message(models.Model):
     is_edited = models.BooleanField(default=False)
     is_deleted = models.BooleanField(default=False)
     deleted_by = models.ManyToManyField(User, related_name='deleted_messages', blank=True)
+    starred_by = models.ManyToManyField(User, related_name='starred_messages', blank=True)
     reply_to = models.ForeignKey('self', on_delete=models.SET_NULL, null=True, blank=True, related_name='replies')
 
     class Meta:
@@ -44,6 +46,7 @@ class Group(models.Model):
     muted_by = models.ManyToManyField(User, related_name='muted_groups', blank=True)
     archived_by = models.ManyToManyField(User, related_name='archived_groups', blank=True)
     deleted_by = models.ManyToManyField(User, related_name='deleted_groups', blank=True)
+    disappearing_duration = models.IntegerField(default=0) # 0=Off, 86400=24h, 604800=7d, 2592000=30d
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
@@ -70,6 +73,7 @@ class GroupMessage(models.Model):
     is_edited = models.BooleanField(default=False)
     is_deleted = models.BooleanField(default=False)
     deleted_by = models.ManyToManyField(User, related_name='deleted_group_messages', blank=True)
+    starred_by = models.ManyToManyField(User, related_name='starred_group_messages', blank=True)
     reply_to = models.ForeignKey('self', on_delete=models.SET_NULL, null=True, blank=True, related_name='replies')
 
     class Meta:
@@ -135,3 +139,18 @@ class StatusView(models.Model):
 
     def __str__(self):
         return f"{self.viewer.username} viewed status {self.status.id}"
+
+class ScheduledMessage(models.Model):
+    sender = models.ForeignKey(User, on_delete=models.CASCADE, related_name='scheduled_messages')
+    conversation = models.ForeignKey(Conversation, on_delete=models.CASCADE, null=True, blank=True, related_name='scheduled_messages')
+    group = models.ForeignKey(Group, on_delete=models.CASCADE, null=True, blank=True, related_name='scheduled_messages')
+    content = models.TextField()
+    scheduled_at = models.DateTimeField()
+    is_sent = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ('scheduled_at',)
+
+    def __str__(self):
+        return f"Scheduled message by {self.sender.username} for {self.scheduled_at}"

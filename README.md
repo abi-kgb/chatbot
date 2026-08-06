@@ -8,37 +8,68 @@ This application goes far beyond basic messaging, implementing a full suite of f
 
 ### 🔐 Privacy & Security
 - **App Lock:** Secure your chats behind a custom passcode lock screen. The app auto-locks after inactivity or upon request.
+- **Per-Chat Passcode Lock:** Lock individual 1-on-1 and group chats with unique custom PINs/passcodes. Message previews in the sidebar are masked as *"🔒 Locked chat"*, and chats automatically re-lock as soon as you switch away to another conversation.
+- **Dedicated "Locked Chats" Folder:** A WhatsApp-style top-level folder view that aggregates all protected chats behind passcode authentication.
 - **WhatsApp-Style Contacts:** A privacy-first address book. If a user is not in your contacts, their username is hidden during search (only their phone number is shown). You can manually add users to your contacts with custom names that sync across your devices.
 - **Block System:** Block and unblock users to prevent unwanted messages and calls.
 
 ### 💬 Messaging & Chats
 - **Real-time Messaging:** Lightning-fast 1-on-1 and group messaging powered by WebSockets.
 - **Group Chats:** Create groups, add/remove members, and manage admin roles. Group avatars and names can be customized.
-- **Advanced Message Actions:** 
-  - **Reply:** Quote specific messages in your response.
-  - **Forward:** Share messages (including media) with other chats or groups.
-  - **Delete:** Delete messages for everyone (leaves a "This message was deleted" tombstone).
-  - **Select & Bulk Actions:** Select multiple messages to forward or delete them all at once.
+- **⭐ Starred Messages Drawer:** Star important messages via context menu (`⌄` ➔ **"Star message ⭐"**). View and manage all saved starred messages anytime from the 3-dots header menu (`⋮`) or sidebar drawer with instant search and contact name resolution.
+- **🕒 Automatic Scheduled Messages:** Schedule messages for any future date and time (**`⋮` 3-dots menu ➔ "Schedule message 🕒"**). Features a dedicated Python background daemon worker (`chat/apps.py`) that checks every 10 seconds to auto-dispatch due scheduled messages live over WebSockets without requiring user clicks. Includes future time validation and a pending messages manager modal.
+- **⏳ Disappearing Messages:** Set timers (24 Hours, 7 Days, 30 Days, or Off) per chat or group (**`⋮` 3-dots menu ➔ "Disappearing messages"**). Expired messages automatically disappear from chat windows for maximum privacy and storage optimization.
+- **Interactive WhatsApp Polls:** Create dynamic multi-option polls in individual and group chats featuring live multi-select vote tabulation, authentic green percentage progress bars, voter avatar circle preview badges, and an exhaustive "View votes" detail breakdown dialog.
+- **Automatic Hyperlink Recognition:** Automatically scans chat texts for HTTP, HTTPS, and web domains (such as Amazon or GitHub) and transforms them into secure, clickable light-blue web hyperlinks (`target="_blank"` with zero-day vulnerability protection `rel="noopener noreferrer"`).
+- **Advanced Message Actions & WhatsApp Selection Bar:** 
+  - **Reply:** Quote specific messages in your response (available via menu or top selection action bar when 1 message is selected).
+  - **Forward:** Share messages and media to other chats or groups (single or multi-message forward).
+  - **Delete Options (Delete for Me vs. Delete for Everyone):**
+    - **Delete for Me:** Remove messages from your view anytime.
+    - **Delete for Everyone:** Soft-delete messages for all participants within a 30-minute sending window (leaves a *"🚫 This message was deleted"* tombstone). Automatically expires after 30 minutes.
+  - **Multi-Select & Bulk Actions:** WhatsApp-style top action bar showing Reply (1 selected), Forward, and Delete icons. Already deleted messages are protected and non-selectable during selection mode.
 - **Chat Management:** Pin important chats to the top, favourite them, mute notifications, or archive them.
 - **Read Receipts & Status:** See when your messages are sent and read. View real-time "Typing..." indicators, "Online" status, and "Last Seen" timestamps.
 - **In-Chat Search:** Search for specific text within a conversation to quickly find old messages.
 
-### 📞 Media & Calls
-- **Voice & Video Calls:** High-quality, real-time, peer-to-peer audio and video calling powered by WebRTC. Includes a custom ringtone, incoming call overlay, and a dedicated call history tab.
-- **Media Attachments:** Send images, videos, audio files, and PDFs directly in the chat.
+### 🏛️ Django Admin Portal & Compliance Audit Trail
+- **Permanent Data Audit Preservation:** Even when messages disappear or are soft-deleted by users in the app, the Django Admin Portal (`http://localhost:8000/admin/chat/message/`) permanently retains 100% of all original message content, edit histories, and attachment records for administrative compliance.
+- **Sequential Multi-Edit Audit History:** Displays complete step-by-step audit trails for edited messages (`Content (Original): ...`, `Edit 1: ...`, `Edit 2: ...`, `Edit 3: ...`) with status badges (`✏️ [EDITED (2 Edits)]`).
+- **IST Local Timezone Integration:** Configured with `TIME_ZONE = 'Asia/Kolkata'` (IST / UTC+5:30) so all Django Admin timestamps reflect local Indian Standard Time.
+
+### 🎨 Media & Image Preview Editor
+- **📄 Document Preview (PDF, Word & Excel):** Preview PDFs, Word (`.doc`/`.docx`), and Excel (`.xls`/`.xlsx`) documents directly inside a full-screen interactive viewport without downloading them first, complete with direct download buttons.
+- **✨ HD Image Quality Toggle:** Select between **Standard Quality** (optimized) and **HD Quality ✨** (full resolution) via an interactive pill toggle before sending pictures in chat.
+- **Chat Image Preview Editor:** Full-screen annotation suite that opens whenever sending images in chat:
+  - **Text Overlays:** Add colorful text anywhere on the image.
+  - **Emoji Stickers:** Add draggable emojis to pictures.
+  - **Scribble & Drawing Canvas:** Freehand drawing on photos with customizable color palettes and brush sizes (3px to 20px).
+  - **Interactive Resizing:** Scale text and emoji stickers via mouse scroll wheel, **+** / **−** buttons, or an interactive size slider (10px - 120px).
+  - **Captions:** Add text captions sent alongside your edited photos.
+- **Voice & Video Calls:** High-quality, real-time, peer-to-peer audio and video calling powered by WebRTC. Includes incoming call overlay and dedicated call history tab.
 - **Voice Notes:** Record and send audio messages directly from the chat window using your microphone.
 - **Avatar Cropping:** Upload and perfectly crop circular profile pictures and group icons using an interactive cropping tool.
 
+### 🔔 Sound Effects & Audio Synthesizer
+- **Web Audio API Notification System:** Zero-dependency, browser-native audio synthesizer requiring no external MP3 files:
+  - **Incoming Message Chime:** WhatsApp-style dual-tone chime (`D5` 587Hz ➔ `A5` 880Hz) on new messages.
+  - **Sent Message Pop:** Subtle outgoing pop sound (`440Hz` ➔ `880Hz`).
+  - **WebRTC Call Ringtone Loop:** WhatsApp-style dual-tone ringing pulse (`440Hz` + `480Hz`) on incoming calls that automatically stops on answer/decline.
+- **Browser Autoplay Unlock & Global Sound Engine:**
+  - **Interaction Audio Unlock:** Automatic pointer/touch/keypress listeners (`click`, `keydown`, `touchstart`) to immediately unlock the Web Audio API context in compliance with modern browser autoplay policies.
+  - **Global WebSocket Audio Listener:** Listens on the global user WebSocket channel so incoming messages from friends trigger notification chimes anywhere across active, background, or unselected chats.
+- **Notification & Ringtone Settings:** Customizable sound preferences inside **Profile Settings**:
+  - **Message Sound Toggle & Tone Picker:** Choose between *Classic Chime*, *Soft Marimba*, *Crisp Pop*, or *Double Pulse*.
+  - **Call Ringtone Toggle & Tone Picker:** Choose between *WhatsApp Ringtone*, *Classic Digital Ring*, *Gentle Melody*, or *Marimba Beat*.
+  - **Live ▶ Play Test Buttons:** Instantly preview selected tones directly inside Settings!
+
 ### 🌟 Status Media Studio & 24-Hour Stories
 - **WhatsApp-Style Status Stories:** Share temporary photo, video, and rich text updates that automatically expire after 24 hours with view receipt timestamps and direct messaging reaction replies.
-- **Interactive Photo & Video Studio:** An all-in-one full-screen media editing suite that launches automatically before publishing:
-  - **Image Cropping & Rotation:** Custom cropping aspect ratios (Original, 9:16 story portrait, 1:1 square, 4:3) and instant 90° rotational transformations.
-  - **Pencil Doodling & Sketching:** Silky-smooth freehand drawing tool with customizable vibrant color palettes and adjustable stroke thicknesses (Fine, Medium, Marker) featuring OS-level hardware pointer locking (`setPointerCapture`) for zero-latency drawing on laptop touchpads, touchscreens, and mice.
-  - **Sticker & Text Overlays:** Stamp floating, draggable emojis and custom styled typography banners directly onto pictures and videos with click-to-resize bounding selection frames and two-finger zoom scaling.
-  - **Video Trimming Sliders:** Precision dual-handle range slider enabling exact start and end timestamp trimming within loop intervals alongside native playback controls across MP4, WebM, MOV, AVI, MKV, and 3GP formats.
-- **Status Notification Counts:** Real-time badge indicator counters alerting users whenever contacts publish new unviewed stories.
+- **Status Quote Preview & Viewer:** High-resolution status thumbnail rendering in chat threads with click-to-view full-screen Status Story Preview modal.
 
 ### 🎨 User Experience
+- **Dedicated Status Dashboard Workspace:** Intelligent layout routing that automatically clears open conversation windows when switching navigation tabs, displaying an elegant WhatsApp-styled status illustration workspace on the main right-hand screen.
+- **Profile About Emoji Personalization:** Built-in interactive theme-aware emoji picker dropdown integrated directly into the Profile Settings About status input field.
 - **Custom Glassmorphic Popups & Modals:** Universal custom-styled confirmation dialogs, blurred backdrops, and interactive notification toasts that completely replace native browser alert windows.
 - **Professional Lucide Icon Design:** Enterprise-grade vector icon architecture providing clean, crisp iconography across headers, menus, attachment pickers, and navigation bars.
 - **Dark & Light Mode:** Toggle between beautifully crafted light and dark themes that mirror WhatsApp's modern design tokens.

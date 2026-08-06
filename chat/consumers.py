@@ -49,6 +49,14 @@ class ChatConsumer(AsyncWebsocketConsumer):
         # Send event to WebSocket
         await self.send(text_data=json.dumps(event['event']))
 
+    # Receive updated message event from room group (edits, reactions, etc.)
+    async def chat_message_updated(self, event):
+        message = event['message']
+        await self.send(text_data=json.dumps({
+            'type': 'message_updated',
+            'message': message
+        }))
+
 class GlobalConsumer(AsyncWebsocketConsumer):
     async def connect(self):
         self.user_id = self.scope['url_route']['kwargs']['user_id']

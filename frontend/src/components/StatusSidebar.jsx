@@ -2,8 +2,10 @@ import { useState, useEffect, useRef } from 'react';
 import api, { getMediaUrl } from '../api';
 import { useContacts } from '../contexts/ContactsContext';
 import { useAlert } from '../contexts/AlertContext';
-import { CircleDot, FileText, Camera, Trash2, X, Eye } from 'lucide-react';
+import { CircleDot, FileText, Camera, Trash2, X, Eye, Smile } from 'lucide-react';
+import EmojiPicker from 'emoji-picker-react';
 import StatusMediaEditorModal from './StatusMediaEditorModal';
+import MediaPicker from './MediaPicker';
 
 function StatusSidebar({ user, onSelectChat, onLogout, onRequestAppLock, onUnviewedCountChange, className = '' }) {
   const [statuses, setStatuses] = useState([]);
@@ -19,6 +21,9 @@ function StatusSidebar({ user, onSelectChat, onLogout, onRequestAppLock, onUnvie
   const [bgColor, setBgColor] = useState('#0b141a');
   const [selectedFile, setSelectedFile] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showStatusEmoji, setShowStatusEmoji] = useState(false);
+  const [isSendingReply, setIsSendingReply] = useState(false);
+  const [showReplyMediaPicker, setShowReplyMediaPicker] = useState(false);
 
   // Status Viewer state
   const [viewingUserGroup, setViewingUserGroup] = useState(null); // { user: {}, stories: [] }
@@ -26,6 +31,9 @@ function StatusSidebar({ user, onSelectChat, onLogout, onRequestAppLock, onUnvie
   const [showViewersDrawer, setShowViewersDrawer] = useState(false);
   const [replyText, setReplyText] = useState('');
   const [toastMsg, setToastMsg] = useState('');
+  const [isPaused, setIsPaused] = useState(false);
+  const [storyProgress, setStoryProgress] = useState(0);
+  const videoRef = useRef(null);
 
   const fileInputRef = useRef(null);
   const userRef = useRef(user);
@@ -49,7 +57,10 @@ function StatusSidebar({ user, onSelectChat, onLogout, onRequestAppLock, onUnvie
   const fetchStatuses = async () => {
     try {
       const res = await api.get('chat/statuses/');
-      const data = res.data || [];
+      const rawData = res.data || [];
+      // Client-side safety: discard any status older than exactly 24 hours
+      const cutoff = Date.now() - 24 * 60 * 60 * 1000;
+      const data = rawData.filter(s => new Date(s.created_at).getTime() >= cutoff);
       setStatuses(data);
 
       // Separate into mine and contacts
@@ -58,7 +69,7 @@ function StatusSidebar({ user, onSelectChat, onLogout, onRequestAppLock, onUnvie
         (stUser?.id != null && currentUser?.id != null && String(stUser.id) === String(currentUser.id)) ||
         (stUser?.username && currentUser?.username && String(stUser.username).trim().toLowerCase() === String(currentUser.username).trim().toLowerCase())
       );
-      const mine = data.filter(s => isMe(s.user));
+      const mine = data.filter(s => isMe(s.user)).sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
       const others = data.filter(s => !isMe(s.user));
 
       setMyStatuses(mine);
@@ -76,11 +87,18 @@ function StatusSidebar({ user, onSelectChat, onLogout, onRequestAppLock, onUnvie
         }
       });
 
-      // Convert to array and sort: users with unviewed stories first
+      // Ensure each contact's stories play from oldest to newest
+      Object.values(groupsMap).forEach(g => {
+        g.stories.sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+      });
+
+      // Convert to array and sort: users with unviewed stories first, then by latest story time
       const groupsArray = Object.values(groupsMap).sort((a, b) => {
         if (a.unviewedCount > 0 && b.unviewedCount === 0) return -1;
         if (a.unviewedCount === 0 && b.unviewedCount > 0) return 1;
-        return 0;
+        const lastA = a.stories[a.stories.length - 1]?.created_at || 0;
+        const lastB = b.stories[b.stories.length - 1]?.created_at || 0;
+        return new Date(lastB) - new Date(lastA);
       });
 
       setContactGroups(groupsArray);
@@ -198,26 +216,31 @@ function StatusSidebar({ user, onSelectChat, onLogout, onRequestAppLock, onUnvie
     }
   };
 
-  const handleSendReactionOrReply = async (content, isEmoji = false) => {
-    if (!viewingUserGroup || (!content.trim() && !isEmoji)) return;
+  const handleSendReactionOrReply = async (content, isEmoji = false, mediaObj = null) => {
+    if (isSendingReply) return; // prevent double-send
+    if (!viewingUserGroup || (!content.trim() && !isEmoji && !mediaObj)) return;
     const currentStory = viewingUserGroup.stories[currentIndex];
     if (!currentStory) return;
-
+    setIsSendingReply(true);
     try {
       const res = await api.post('chat/conversations/', { participants: [user.id, viewingUserGroup.user.id] });
       const convId = res.data.id;
 
+      const messageType = mediaObj ? (mediaObj.type === 'gif' || mediaObj.type === 'sticker' ? 'status_reply' : 'status_reply') : 'status_reply';
+      const messageContent = mediaObj ? (mediaObj.url || content) : (isEmoji ? content : replyText);
+
       const formData = new FormData();
       formData.append('conversation', convId);
-      formData.append('message_type', 'status_reply');
-      formData.append('content', isEmoji ? content : replyText);
+      formData.append('message_type', messageType);
+      formData.append('content', messageContent);
       formData.append('metadata', JSON.stringify({
         status_id: currentStory.id,
         author: viewingUserGroup.user.username,
         bg_color: currentStory.bg_color,
         story_content: currentStory.content,
         file_url: currentStory.file ? getMediaUrl(currentStory.file) : null,
-        is_reaction: isEmoji,
+        is_reaction: isEmoji || Boolean(mediaObj),
+        reaction_media: mediaObj ? { url: mediaObj.url, type: mediaObj.type, media_type: mediaObj.media_type } : null,
         timestamp: currentStory.created_at
       }));
 
@@ -225,12 +248,16 @@ function StatusSidebar({ user, onSelectChat, onLogout, onRequestAppLock, onUnvie
         headers: { 'Content-Type': 'multipart/form-data' }
       });
 
-      if (!isEmoji) setReplyText('');
-      setToastMsg(isEmoji ? `Reacted with ${content} to direct chat!` : 'Reply sent to chat!');
+      if (!isEmoji && !mediaObj) setReplyText('');
+      setShowReplyMediaPicker(false);
+      setIsPaused(false);
+      setToastMsg(mediaObj ? `Sent ${mediaObj.media_type || 'reaction'} to direct chat!` : (isEmoji ? `Reacted with ${content} to direct chat!` : 'Reply sent to chat!'));
       setTimeout(() => setToastMsg(''), 3000);
     } catch (err) {
       console.error('Failed to send reply/reaction:', err);
       showAlert('Error', 'Failed to send message.');
+    } finally {
+      setIsSendingReply(false);
     }
   };
 
@@ -259,6 +286,45 @@ function StatusSidebar({ user, onSelectChat, onLogout, onRequestAppLock, onUnvie
 
   const currentActiveStory = viewingUserGroup?.stories[currentIndex];
   const isViewingMyOwn = viewingUserGroup?.user.id === user.id || viewingUserGroup?.user.username === user.username;
+  const isVideoStory = currentActiveStory?.file && (
+    currentActiveStory.file.endsWith('.mp4') || 
+    currentActiveStory.file.endsWith('.webm') || 
+    currentActiveStory.file.endsWith('.mov') || 
+    currentActiveStory.metadata?.is_video
+  );
+
+  useEffect(() => {
+    setStoryProgress(0);
+    setIsPaused(false);
+  }, [currentIndex, viewingUserGroup?.user?.id]);
+
+  useEffect(() => {
+    if (!viewingUserGroup || !currentActiveStory || isVideoStory || isPaused || showViewersDrawer) {
+      return;
+    }
+    const timer = setInterval(() => {
+      setStoryProgress((prev) => {
+        if (prev >= 100) {
+          clearInterval(timer);
+          handleNextStory();
+          return 100;
+        }
+        return prev + 2;
+      });
+    }, 100);
+    return () => clearInterval(timer);
+  }, [viewingUserGroup, currentActiveStory, isVideoStory, isPaused, showViewersDrawer, currentIndex]);
+
+  const togglePause = () => {
+    setIsPaused((prev) => {
+      const next = !prev;
+      if (videoRef.current) {
+        if (next) videoRef.current.pause();
+        else videoRef.current.play();
+      }
+      return next;
+    });
+  };
 
   return (
     <div className={`sidebar ${className}`} style={{ display: 'flex', flexDirection: 'column', height: '100%', borderRight: '1px solid var(--border-color)', backgroundColor: 'var(--bg-secondary)' }}>
@@ -435,8 +501,8 @@ function StatusSidebar({ user, onSelectChat, onLogout, onRequestAppLock, onUnvie
                 <div>
                   <div style={{
                     backgroundColor: bgColor, height: '220px', borderRadius: '12px', display: 'flex',
-                    justifyContent: 'center', alignItems: 'center', padding: '20px', marginBottom: '15px',
-                    boxShadow: 'inset 0 0 15px rgba(0,0,0,0.3)'
+                    justifyContent: 'center', alignItems: 'center', padding: '20px', marginBottom: '8px',
+                    boxShadow: 'inset 0 0 15px rgba(0,0,0,0.3)', position: 'relative'
                   }}>
                     <textarea
                       value={textContent}
@@ -450,6 +516,39 @@ function StatusSidebar({ user, onSelectChat, onLogout, onRequestAppLock, onUnvie
                       }}
                     />
                   </div>
+
+                  {/* Emoji button + picker */}
+                  <div style={{ position: 'relative', marginBottom: '12px', display: 'flex', justifyContent: 'flex-end' }}>
+                    <button
+                      type="button"
+                      onClick={() => setShowStatusEmoji(prev => !prev)}
+                      title="Add Emoji"
+                      style={{
+                        background: showStatusEmoji ? 'rgba(0,168,132,0.15)' : 'transparent',
+                        border: '1px solid var(--border-color)', borderRadius: '20px',
+                        padding: '5px 12px', cursor: 'pointer',
+                        color: showStatusEmoji ? '#00a884' : 'var(--text-secondary)',
+                        display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', fontWeight: '600'
+                      }}
+                    >
+                      <Smile size={16} /> Emoji
+                    </button>
+                    {showStatusEmoji && (
+                      <div style={{ position: 'absolute', bottom: '38px', right: 0, zIndex: 2000 }}>
+                        <EmojiPicker
+                          onEmojiClick={(emojiData) => {
+                            setTextContent(prev => prev + emojiData.emoji);
+                            setShowStatusEmoji(false);
+                          }}
+                          width={320}
+                          height={380}
+                          searchDisabled={false}
+                          skinTonesDisabled
+                        />
+                      </div>
+                    )}
+                  </div>
+
                   <div style={{ marginBottom: '20px' }}>
                     <label style={{ fontSize: '13px', color: 'var(--text-secondary)', display: 'block', marginBottom: '8px' }}>Background Color</label>
                     <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
@@ -543,9 +642,22 @@ function StatusSidebar({ user, onSelectChat, onLogout, onRequestAppLock, onUnvie
           {/* Top Segments & User Bar */}
           <div style={{ width: '100%', maxWidth: '550px', padding: '0 15px', zIndex: 2 }}>
             <div style={{ display: 'flex', gap: '4px', marginBottom: '12px' }}>
-              {viewingUserGroup.stories.map((s, idx) => (
-                <div key={s.id} style={{ flex: 1, height: '4px', backgroundColor: idx <= currentIndex ? 'white' : 'rgba(255,255,255,0.3)', borderRadius: '2px', transition: 'all 0.3s' }} />
-              ))}
+              {viewingUserGroup.stories.map((s, idx) => {
+                let widthPercent = 0;
+                if (idx < currentIndex) widthPercent = 100;
+                else if (idx === currentIndex) widthPercent = storyProgress;
+                else widthPercent = 0;
+
+                return (
+                  <div 
+                    key={s.id} 
+                    onClick={() => { setCurrentIndex(idx); }} 
+                    style={{ flex: 1, height: '3.5px', backgroundColor: 'rgba(255,255,255,0.35)', borderRadius: '2px', overflow: 'hidden', cursor: 'pointer', position: 'relative' }}
+                  >
+                    <div style={{ width: `${widthPercent}%`, height: '100%', backgroundColor: '#ffffff', transition: idx === currentIndex && !isPaused && !isVideoStory ? 'width 0.1s linear' : 'none' }} />
+                  </div>
+                );
+              })}
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -587,6 +699,22 @@ function StatusSidebar({ user, onSelectChat, onLogout, onRequestAppLock, onUnvie
             {/* Left Nav Zone */}
             <div onClick={handlePrevStory} style={{ position: 'absolute', top: 0, left: 0, width: '30%', height: '100%', zIndex: 5, cursor: 'pointer' }} title="Previous Story" />
             
+            {/* Center Pause/Play Zone */}
+            <div onClick={togglePause} style={{ position: 'absolute', top: 0, left: '30%', width: '40%', height: '100%', zIndex: 5, cursor: 'pointer', display: 'flex', justifyContent: 'center', alignItems: 'center' }} title={isPaused ? "Click to Resume" : "Click to Pause"}>
+              {isPaused && (
+                <div style={{
+                  width: '68px', height: '68px', borderRadius: '50%',
+                  backgroundColor: 'rgba(0, 0, 0, 0.65)', border: '2px solid white',
+                  display: 'flex', justifyContent: 'center', alignItems: 'center', color: 'white',
+                  boxShadow: '0 4px 20px rgba(0,0,0,0.5)', transition: 'all 0.2s'
+                }}>
+                  <svg viewBox="0 0 24 24" width="36" height="36" fill="currentColor" style={{ marginLeft: '4px' }}>
+                    <path d="M8 5v14l11-7z" />
+                  </svg>
+                </div>
+              )}
+            </div>
+
             {/* Right Nav Zone */}
             <div onClick={handleNextStory} style={{ position: 'absolute', top: 0, right: 0, width: '30%', height: '100%', zIndex: 5, cursor: 'pointer' }} title="Next Story" />
 
@@ -595,19 +723,31 @@ function StatusSidebar({ user, onSelectChat, onLogout, onRequestAppLock, onUnvie
                 {currentActiveStory.file.endsWith('.mp4') || currentActiveStory.file.endsWith('.webm') || currentActiveStory.file.endsWith('.mov') || currentActiveStory.metadata?.is_video ? (
                   <div style={{ position: 'relative', display: 'flex', justifyContent: 'center', alignItems: 'center', maxHeight: 'calc(100vh - 240px)', maxWidth: '100%' }}>
                     <video 
+                      ref={videoRef}
                       src={getMediaUrl(currentActiveStory.file)} 
                       autoPlay 
-                      controls 
+                      playsInline 
                       onLoadedMetadata={(e) => {
                         if (currentActiveStory.metadata?.startTime) {
                           e.target.currentTime = currentActiveStory.metadata.startTime;
                         }
                       }}
                       onTimeUpdate={(e) => {
-                        if (currentActiveStory.metadata?.endTime && e.target.currentTime >= currentActiveStory.metadata.endTime) {
-                          e.target.currentTime = currentActiveStory.metadata?.startTime || 0;
-                          e.target.play();
+                        if (isPaused) return;
+                        const startTime = currentActiveStory.metadata?.startTime || 0;
+                        const endTime = currentActiveStory.metadata?.endTime || e.target.duration || 0;
+                        const totalDuration = endTime - startTime;
+                        if (totalDuration > 0) {
+                          const current = e.target.currentTime - startTime;
+                          const progress = Math.min(100, Math.max(0, (current / totalDuration) * 100));
+                          setStoryProgress(progress);
                         }
+                        if (endTime && e.target.currentTime >= endTime) {
+                          handleNextStory();
+                        }
+                      }}
+                      onEnded={() => {
+                        handleNextStory();
                       }}
                       style={{ maxHeight: 'calc(100vh - 240px)', maxWidth: '100%', borderRadius: '12px', boxShadow: '0 4px 20px rgba(0,0,0,0.6)' }} 
                     />
@@ -674,7 +814,12 @@ function StatusSidebar({ user, onSelectChat, onLogout, onRequestAppLock, onUnvie
             {isViewingMyOwn ? (
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
                 <button
-                  onClick={() => setShowViewersDrawer(!showViewersDrawer)}
+                  onClick={() => {
+                    const nextDrawer = !showViewersDrawer;
+                    setShowViewersDrawer(nextDrawer);
+                    if (nextDrawer) setIsPaused(true);
+                    else setIsPaused(false);
+                  }}
                   style={{ backgroundColor: 'rgba(255,255,255,0.15)', color: 'white', border: '1px solid rgba(255,255,255,0.2)', padding: '8px 20px', borderRadius: '25px', fontWeight: '600', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', backdropFilter: 'blur(5px)' }}
                 >
                   <Eye size={18} /> Viewed by {currentActiveStory.views?.length || 0}
@@ -724,21 +869,51 @@ function StatusSidebar({ user, onSelectChat, onLogout, onRequestAppLock, onUnvie
                     </button>
                   ))}
                 </div>
+                {/* Floating Media Picker for status replies */}
+                {showReplyMediaPicker && (
+                  <div style={{ position: 'absolute', bottom: '70px', right: '15px', zIndex: 10000 }}>
+                    <MediaPicker
+                      onSelectEmoji={(emojiData) => handleSendReactionOrReply(emojiData.emoji, true)}
+                      onSelectGif={(gif) => handleSendReactionOrReply(gif.title || 'GIF', false, { url: gif.url, media_type: 'GIF', type: 'gif' })}
+                      onSelectSticker={(sticker) => handleSendReactionOrReply(sticker.title || 'Sticker', false, { url: sticker.url, media_type: 'Sticker', type: 'sticker' })}
+                      onClose={() => { setShowReplyMediaPicker(false); setIsPaused(false); }}
+                    />
+                  </div>
+                )}
+
                 {/* Text Reply Input */}
-                <form onSubmit={e => { e.preventDefault(); handleSendReactionOrReply(replyText, false); }} style={{ display: 'flex', gap: '8px' }}>
-                  <input
-                    type="text"
-                    placeholder={`Reply to ${getDisplayName(viewingUserGroup.user, true)}...`}
-                    value={replyText}
-                    onChange={e => setReplyText(e.target.value)}
-                    style={{ flex: 1, padding: '10px 16px', backgroundColor: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.3)', borderRadius: '25px', color: 'white', outline: 'none', fontSize: '15px', backdropFilter: 'blur(5px)' }}
-                  />
+                <form onSubmit={e => { e.preventDefault(); if (!isSendingReply) handleSendReactionOrReply(replyText, false); }} style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                  <div style={{ flex: 1, position: 'relative', display: 'flex', alignItems: 'center' }}>
+                    <input
+                      type="text"
+                      placeholder={`Reply to ${getDisplayName(viewingUserGroup.user, true)}...`}
+                      value={replyText}
+                      onChange={e => setReplyText(e.target.value)}
+                      onFocus={() => setIsPaused(true)}
+                      onBlur={() => {
+                        if (!showReplyMediaPicker) setIsPaused(false);
+                      }}
+                      style={{ width: '100%', padding: '10px 42px 10px 16px', backgroundColor: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.3)', borderRadius: '25px', color: 'white', outline: 'none', fontSize: '15px', backdropFilter: 'blur(5px)', boxSizing: 'border-box' }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const next = !showReplyMediaPicker;
+                        setShowReplyMediaPicker(next);
+                        setIsPaused(next);
+                      }}
+                      title="Emojis, GIFs & Stickers"
+                      style={{ position: 'absolute', right: '10px', background: 'none', border: 'none', color: showReplyMediaPicker ? '#00a884' : 'rgba(255,255,255,0.8)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '4px', transition: 'color 0.2s' }}
+                    >
+                      <Smile size={22} />
+                    </button>
+                  </div>
                   <button
                     type="submit"
-                    disabled={!replyText.trim()}
-                    style={{ backgroundColor: '#00a884', color: 'white', border: 'none', borderRadius: '25px', padding: '0 20px', fontWeight: '600', cursor: 'pointer', disabled: { opacity: 0.5 } }}
+                    disabled={!replyText.trim() || isSendingReply}
+                    style={{ backgroundColor: isSendingReply ? '#667781' : '#00a884', color: 'white', border: 'none', borderRadius: '25px', padding: '10px 20px', fontWeight: '600', cursor: isSendingReply ? 'not-allowed' : 'pointer', transition: 'background 0.2s', flexShrink: 0 }}
                   >
-                    Send 🚀
+                    {isSendingReply ? 'Sending...' : 'Send 🚀'}
                   </button>
                 </form>
               </div>

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Eye, EyeOff } from 'lucide-react';
 
 const hashPassword = async (password) => {
   const msgBuffer = new TextEncoder().encode(password);
@@ -9,6 +10,7 @@ const hashPassword = async (password) => {
 
 function LockScreen({ onUnlock }) {
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState(false);
 
   const handleUnlock = async (e) => {
@@ -46,19 +48,40 @@ function LockScreen({ onUnlock }) {
       </div>
 
       <form onSubmit={handleUnlock} style={{ width: '300px', display: 'flex', flexDirection: 'column', gap: '15px' }}>
-        <input
-          type="password"
-          placeholder="Enter password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          className="chat-input"
-          style={{ 
-            width: '100%', padding: '15px', borderRadius: '8px', 
-            border: error ? '1px solid #f15c6d' : 'none',
-            outline: 'none', textAlign: 'center', fontSize: '16px'
-          }}
-          autoFocus
-        />
+        <div style={{ position: 'relative', display: 'flex', alignItems: 'center', width: '100%' }}>
+          <input
+            type={showPassword ? "text" : "password"}
+            placeholder="Enter password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            className="chat-input"
+            style={{ 
+              width: '100%', padding: '15px 45px 15px 15px', borderRadius: '8px', 
+              border: error ? '1px solid #f15c6d' : 'none',
+              outline: 'none', textAlign: 'center', fontSize: '16px'
+            }}
+            autoFocus
+          />
+          <button
+            type="button"
+            onClick={() => setShowPassword(!showPassword)}
+            title={showPassword ? "Hide password" : "Show password"}
+            style={{
+              position: 'absolute',
+              right: '12px',
+              background: 'none',
+              border: 'none',
+              color: 'var(--text-secondary)',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: '4px'
+            }}
+          >
+            {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+          </button>
+        </div>
         {error && <p style={{ color: '#f15c6d', margin: 0, textAlign: 'center', fontSize: '14px' }}>Incorrect password</p>}
         <button 
           type="submit"

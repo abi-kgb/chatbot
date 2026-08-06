@@ -23,6 +23,7 @@ function AppLockSetupModal({ onClose, onSetupComplete }) {
     }
     const hash = await hashPassword(password);
     localStorage.setItem('chatbox_app_lock_hash', hash);
+    localStorage.setItem('chatbox_app_lock_enabled', 'true');
     onSetupComplete();
     onClose();
   };

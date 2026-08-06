@@ -1,16 +1,23 @@
 from rest_framework import serializers
-from .models import Conversation, Message, Group, GroupMember, GroupMessage, Call, PollVote, Status, StatusView
+from .models import Conversation, Message, Group, GroupMember, GroupMessage, Call, PollVote, Status, StatusView, ScheduledMessage
 from users.serializers import UserSerializer
 
 class MessageSerializer(serializers.ModelSerializer):
     sender = UserSerializer(read_only=True)
     replied_to = serializers.SerializerMethodField()
     poll_votes = serializers.SerializerMethodField()
+    is_starred = serializers.SerializerMethodField()
 
     class Meta:
         model = Message
-        fields = ('id', 'conversation', 'sender', 'content', 'file', 'message_type', 'metadata', 'timestamp', 'is_read', 'is_edited', 'is_deleted', 'reply_to', 'replied_to', 'poll_votes')
+        fields = ('id', 'conversation', 'sender', 'content', 'file', 'message_type', 'metadata', 'timestamp', 'is_read', 'is_edited', 'is_deleted', 'reply_to', 'replied_to', 'poll_votes', 'is_starred')
         read_only_fields = ('sender',)
+
+    def get_is_starred(self, obj):
+        request = self.context.get('request')
+        if request and request.user.is_authenticated:
+            return obj.starred_by.filter(id=request.user.id).exists()
+        return False
 
     def get_poll_votes(self, obj):
         if obj.message_type == 'poll':
@@ -55,7 +62,7 @@ class ConversationSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Conversation
-        fields = ('id', 'participants', 'created_at', 'updated_at', 'last_message', 'unread_count', 'is_pinned', 'is_favourite', 'is_muted', 'is_archived', 'is_blocked')
+        fields = ('id', 'participants', 'created_at', 'updated_at', 'last_message', 'unread_count', 'is_pinned', 'is_favourite', 'is_muted', 'is_archived', 'is_blocked', 'disappearing_duration')
 
     def get_is_pinned(self, obj):
         request = self.context.get('request')
@@ -114,11 +121,18 @@ class GroupMessageSerializer(serializers.ModelSerializer):
     sender = UserSerializer(read_only=True)
     replied_to = serializers.SerializerMethodField()
     poll_votes = serializers.SerializerMethodField()
+    is_starred = serializers.SerializerMethodField()
 
     class Meta:
         model = GroupMessage
-        fields = ('id', 'group', 'sender', 'content', 'file', 'message_type', 'metadata', 'timestamp', 'is_edited', 'is_deleted', 'reply_to', 'replied_to', 'poll_votes')
+        fields = ('id', 'group', 'sender', 'content', 'file', 'message_type', 'metadata', 'timestamp', 'is_edited', 'is_deleted', 'reply_to', 'replied_to', 'poll_votes', 'is_starred')
         read_only_fields = ('sender',)
+
+    def get_is_starred(self, obj):
+        request = self.context.get('request')
+        if request and request.user.is_authenticated:
+            return obj.starred_by.filter(id=request.user.id).exists()
+        return False
 
     def get_poll_votes(self, obj):
         if obj.message_type == 'poll':
@@ -162,7 +176,7 @@ class GroupSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Group
-        fields = ('id', 'name', 'avatar', 'created_at', 'members', 'last_message', 'unread_count', 'is_pinned', 'is_favourite', 'is_muted', 'is_archived')
+        fields = ('id', 'name', 'avatar', 'created_at', 'members', 'last_message', 'unread_count', 'is_pinned', 'is_favourite', 'is_muted', 'is_archived', 'disappearing_duration')
 
     def get_is_pinned(self, obj):
         request = self.context.get('request')
@@ -235,4 +249,12 @@ class StatusSerializer(serializers.ModelSerializer):
         if request and request.user.is_authenticated:
             return obj.views.filter(viewer=request.user).exists()
         return False
+
+class ScheduledMessageSerializer(serializers.ModelSerializer):
+    sender = UserSerializer(read_only=True)
+
+    class Meta:
+        model = ScheduledMessage
+        fields = ('id', 'sender', 'conversation', 'group', 'content', 'scheduled_at', 'is_sent', 'created_at')
+        read_only_fields = ('sender', 'is_sent', 'created_at')
 

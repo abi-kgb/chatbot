@@ -10,6 +10,7 @@ import api from '../api';
 import { useContacts } from '../contexts/ContactsContext';
 import { useAlert } from '../contexts/AlertContext';
 import { MessageCircle, PhoneCall, CircleDot, Users, Star, Settings } from 'lucide-react';
+import { playMessageNotificationSound, startCallRingtone, stopCallRingtone } from '../utils/soundEffects';
 
 function ChatLayout({ user, setUser, onLogout, onRequestAppLock }) {
   const { getDisplayName } = useContacts();
@@ -118,7 +119,9 @@ function ChatLayout({ user, setUser, onLogout, onRequestAppLock }) {
         setIsVideoCall(data.isVideo);
         setActiveCallChat(data.chat);
         setCallState('incoming');
+        startCallRingtone();
       } else if (data.type === 'call_answer') {
+        stopCallRingtone();
         if (peerConnectionRef.current) {
           peerConnectionRef.current.setRemoteDescription(new RTCSessionDescription(data.sdp)).then(() => {
             iceCandidateQueueRef.current.forEach(c => peerConnectionRef.current.addIceCandidate(new RTCIceCandidate(c)));
@@ -169,6 +172,7 @@ function ChatLayout({ user, setUser, onLogout, onRequestAppLock }) {
         if (peerConnectionRef.current) peerConnectionRef.current.close();
         peerConnectionRef.current = null;
         if (localStream) localStream.getTracks().forEach(t => t.stop());
+        stopCallRingtone();
         setLocalStream(null);
         setRemoteStream(null);
         setCallState(null);
@@ -176,6 +180,16 @@ function ChatLayout({ user, setUser, onLogout, onRequestAppLock }) {
         setActiveCallChat(null);
         callRoleRef.current = null;
         callStartTimeRef.current = null;
+      } else if (data.type === 'chat_message' || data.type === 'new_message') {
+        const msg = data.message;
+        if (msg) {
+          const senderUsername = msg.sender?.username || msg.sender;
+          const senderId = msg.sender?.id || msg.sender;
+          const isFromMe = senderId === user.id || senderUsername === user.username;
+          if (!isFromMe) {
+            playMessageNotificationSound();
+          }
+        }
       }
     };
 
@@ -288,6 +302,7 @@ function ChatLayout({ user, setUser, onLogout, onRequestAppLock }) {
   };
 
   const acceptCall = async () => {
+    stopCallRingtone();
     setCallState('connecting');
     callRoleRef.current = 'receiver';
     callStartTimeRef.current = null;
@@ -357,6 +372,7 @@ function ChatLayout({ user, setUser, onLogout, onRequestAppLock }) {
   };
 
   const endCall = (broadcast = true) => {
+    stopCallRingtone();
     const currentChat = activeCallChatRef.current || activeCallChat;
     const currentRole = callRoleRef.current;
     const currentState = callStateRef.current || callState;
@@ -414,17 +430,24 @@ function ChatLayout({ user, setUser, onLogout, onRequestAppLock }) {
     setShowCreateGroup(false);
   };
 
+  const handleTabChange = (tab) => {
+    if (activeTab !== tab) {
+      setActiveTab(tab);
+      setActiveChat(null);
+    }
+  };
+
   return (
     <div className="app-container">
       <div className={`left-nav ${activeChat ? 'mobile-hidden' : ''}`}>
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-          <div className={`nav-icon ${activeTab === 'all' ? 'active' : ''}`} title="Chats" onClick={() => setActiveTab('all')} style={{ cursor: 'pointer' }}>
+          <div className={`nav-icon ${activeTab === 'all' ? 'active' : ''}`} title="Chats" onClick={() => handleTabChange('all')} style={{ cursor: 'pointer' }}>
             <MessageCircle size={24} strokeWidth={2.2} />
           </div>
-          <div className={`nav-icon ${activeTab === 'calls' ? 'active' : ''}`} title="Calls" style={{ marginTop: '10px', cursor: 'pointer' }} onClick={() => setActiveTab('calls')}>
+          <div className={`nav-icon ${activeTab === 'calls' ? 'active' : ''}`} title="Calls" style={{ marginTop: '10px', cursor: 'pointer' }} onClick={() => handleTabChange('calls')}>
             <PhoneCall size={24} strokeWidth={2.2} />
           </div>
-          <div className={`nav-icon ${activeTab === 'status' ? 'active' : ''}`} title="Status / Stories" style={{ marginTop: '10px', cursor: 'pointer', position: 'relative' }} onClick={() => setActiveTab('status')}>
+          <div className={`nav-icon ${activeTab === 'status' ? 'active' : ''}`} title="Status / Stories" style={{ marginTop: '10px', cursor: 'pointer', position: 'relative' }} onClick={() => handleTabChange('status')}>
             <CircleDot size={24} strokeWidth={2.2} />
             {unviewedStatusCount > 0 && (
               <div style={{
@@ -441,10 +464,10 @@ function ChatLayout({ user, setUser, onLogout, onRequestAppLock }) {
               </div>
             )}
           </div>
-          <div className={`nav-icon ${activeTab === 'groups' ? 'active' : ''}`} title="Groups" onClick={() => setActiveTab('groups')} style={{ cursor: 'pointer', marginTop: '10px' }}>
+          <div className={`nav-icon ${activeTab === 'groups' ? 'active' : ''}`} title="Groups" onClick={() => handleTabChange('groups')} style={{ cursor: 'pointer', marginTop: '10px' }}>
             <Users size={24} strokeWidth={2.2} />
           </div>
-          <div className={`nav-icon ${activeTab === 'favourites' ? 'active' : ''}`} title="Favourites" onClick={() => setActiveTab('favourites')} style={{ cursor: 'pointer', marginTop: '10px' }}>
+          <div className={`nav-icon ${activeTab === 'favourites' ? 'active' : ''}`} title="Favourites" onClick={() => handleTabChange('favourites')} style={{ cursor: 'pointer', marginTop: '10px' }}>
             <Star size={24} strokeWidth={2.2} />
           </div>
         </div>
@@ -458,7 +481,7 @@ function ChatLayout({ user, setUser, onLogout, onRequestAppLock }) {
       {activeTab === 'calls' ? (
         <CallHistorySidebar 
           user={user} 
-          onSelectChat={setActiveChat} 
+          onSelectChat={(chat) => { setActiveChat(chat); setActiveTab('all'); }} 
           onLogout={onLogout} 
           onRequestAppLock={onRequestAppLock} 
           className={activeChat ? 'mobile-hidden' : ''}
@@ -488,7 +511,17 @@ function ChatLayout({ user, setUser, onLogout, onRequestAppLock }) {
         />
       )}
       
-      {activeChat ? (
+      {activeTab === 'status' ? (
+        <div className="empty-chat mobile-hidden" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: 'var(--text-secondary)' }}>
+          <div style={{ width: '88px', height: '88px', borderRadius: '50%', backgroundColor: 'rgba(0, 168, 132, 0.1)', border: '1px solid rgba(0, 168, 132, 0.25)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '24px', color: '#00a884', boxShadow: '0 8px 24px rgba(0, 0, 0, 0.2)' }}>
+            <CircleDot size={48} strokeWidth={1.8} />
+          </div>
+          <h2 style={{ fontSize: '26px', fontWeight: '300', color: 'var(--text-primary)', marginBottom: '12px', letterSpacing: '-0.3px' }}>Status Updates</h2>
+          <p style={{ maxWidth: '420px', textAlign: 'center', lineHeight: '1.6', fontSize: '15px', color: 'var(--text-secondary)' }}>
+            Click on a contact on the left to view their status stories or create your own photo, video, and text updates to share with your friends.
+          </p>
+        </div>
+      ) : activeChat ? (
         <ChatWindow 
           user={user} 
           chat={activeChat} 

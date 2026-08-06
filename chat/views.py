@@ -1,10 +1,10 @@
 from rest_framework import viewsets, permissions, status
-from rest_framework.decorators import action
+from rest_framework.decorators import action, api_view
 from rest_framework.response import Response
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from django.db.models import Q
-from .models import Conversation, Message, Group, GroupMember, GroupMessage, Call, Status, StatusView
-from .serializers import ConversationSerializer, MessageSerializer, GroupSerializer, GroupMessageSerializer, GroupMemberSerializer, CallSerializer, StatusSerializer, StatusViewSerializer
+from .models import Conversation, Message, Group, GroupMember, GroupMessage, Call, Status, StatusView, ScheduledMessage
+from .serializers import ConversationSerializer, MessageSerializer, GroupSerializer, GroupMessageSerializer, GroupMemberSerializer, CallSerializer, StatusSerializer, StatusViewSerializer, ScheduledMessageSerializer
 
 class ConversationViewSet(viewsets.ModelViewSet):
     serializer_class = ConversationSerializer
@@ -155,13 +155,36 @@ class MessageViewSet(viewsets.ModelViewSet):
             try:
                 metadata = json.loads(metadata)
             except:
-                pass
-            serializer.save(sender=self.request.user, metadata=metadata)
-        else:
-            serializer.save(sender=self.request.user)
+                metadata = {}
+        elif not isinstance(metadata, dict):
+            metadata = {}
+
+        content_val = serializer.validated_data.get('content')
+        if content_val and 'original_content' not in metadata:
+            metadata['original_content'] = content_val
+
+        serializer.save(sender=self.request.user, metadata=metadata)
 
     def perform_update(self, serializer):
-        serializer.save(is_edited=True)
+        instance = serializer.instance
+        new_content = serializer.validated_data.get('content', instance.content)
+
+        meta = dict(instance.metadata) if isinstance(instance.metadata, dict) else {}
+        if 'original_content' not in meta or not meta['original_content']:
+            meta['original_content'] = instance.content
+
+        if new_content != instance.content:
+            from django.utils import timezone
+            edit_history = list(meta.get('edit_history', []))
+            edit_history.append({
+                'from': instance.content,
+                'to': new_content,
+                'timestamp': timezone.now().isoformat()
+            })
+            meta['edit_history'] = edit_history
+
+        serializer.save(is_edited=True, metadata=meta)
+
         from channels.layers import get_channel_layer
         from asgiref.sync import async_to_sync
         channel_layer = get_channel_layer()
@@ -176,11 +199,22 @@ class MessageViewSet(viewsets.ModelViewSet):
 
     def destroy(self, request, *args, **kwargs):
         instance = self.get_object()
-        # Only the sender can delete their message
+        # Only the sender can delete for everyone
         if instance.sender != request.user:
             return Response({'error': 'You can only delete your own messages.'}, status=status.HTTP_403_FORBIDDEN)
         
-        # Soft delete
+        # Check 30-minute time limit
+        from django.utils import timezone
+        import datetime
+        time_diff = timezone.now() - instance.timestamp
+        if time_diff > datetime.timedelta(minutes=30):
+            return Response({'error': 'You can only delete for everyone within 30 minutes of sending.'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Soft delete for everyone
+        meta = instance.metadata or {}
+        if 'original_content' not in meta and instance.content:
+            meta['original_content'] = instance.content
+        instance.metadata = meta
         instance.is_deleted = True
         instance.content = ""
         instance.file = None
@@ -198,6 +232,12 @@ class MessageViewSet(viewsets.ModelViewSet):
         )
         
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+    @action(detail=True, methods=['post'])
+    def delete_for_me(self, request, pk=None, conversation_pk=None):
+        message = self.get_object()
+        message.deleted_by.add(request.user)
+        return Response({'status': 'hidden'})
 
     @action(detail=True, methods=['post'])
     def vote_poll(self, request, pk=None, conversation_pk=None):
@@ -645,13 +685,36 @@ class GroupMessageViewSet(viewsets.ModelViewSet):
             try:
                 metadata = json.loads(metadata)
             except:
-                pass
-            serializer.save(sender=self.request.user, metadata=metadata)
-        else:
-            serializer.save(sender=self.request.user)
+                metadata = {}
+        elif not isinstance(metadata, dict):
+            metadata = {}
+
+        content_val = serializer.validated_data.get('content')
+        if content_val and 'original_content' not in metadata:
+            metadata['original_content'] = content_val
+
+        serializer.save(sender=self.request.user, metadata=metadata)
 
     def perform_update(self, serializer):
-        serializer.save(is_edited=True)
+        instance = serializer.instance
+        new_content = serializer.validated_data.get('content', instance.content)
+
+        meta = dict(instance.metadata) if isinstance(instance.metadata, dict) else {}
+        if 'original_content' not in meta or not meta['original_content']:
+            meta['original_content'] = instance.content
+
+        if new_content != instance.content:
+            from django.utils import timezone
+            edit_history = list(meta.get('edit_history', []))
+            edit_history.append({
+                'from': instance.content,
+                'to': new_content,
+                'timestamp': timezone.now().isoformat()
+            })
+            meta['edit_history'] = edit_history
+
+        serializer.save(is_edited=True, metadata=meta)
+
         from channels.layers import get_channel_layer
         from asgiref.sync import async_to_sync
         channel_layer = get_channel_layer()
@@ -666,11 +729,22 @@ class GroupMessageViewSet(viewsets.ModelViewSet):
 
     def destroy(self, request, *args, **kwargs):
         instance = self.get_object()
-        # Only the sender can delete their message
+        # Only the sender can delete for everyone
         if instance.sender != request.user:
             return Response({'error': 'You can only delete your own messages.'}, status=status.HTTP_403_FORBIDDEN)
         
-        # Soft delete
+        # Check 30-minute time limit
+        from django.utils import timezone
+        import datetime
+        time_diff = timezone.now() - instance.timestamp
+        if time_diff > datetime.timedelta(minutes=30):
+            return Response({'error': 'You can only delete for everyone within 30 minutes of sending.'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Soft delete for everyone
+        meta = instance.metadata or {}
+        if 'original_content' not in meta and instance.content:
+            meta['original_content'] = instance.content
+        instance.metadata = meta
         instance.is_deleted = True
         instance.content = ""
         instance.file = None
@@ -689,6 +763,12 @@ class GroupMessageViewSet(viewsets.ModelViewSet):
         
         
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+    @action(detail=True, methods=['post'])
+    def delete_for_me(self, request, pk=None, group_pk=None):
+        message = self.get_object()
+        message.deleted_by.add(request.user)
+        return Response({'status': 'hidden'})
 
     @action(detail=True, methods=['post'])
     def vote_poll(self, request, pk=None, group_pk=None):
@@ -888,8 +968,11 @@ class StatusViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         from django.utils import timezone
         from datetime import timedelta
-        twenty_four_hours_ago = timezone.now() - timedelta(hours=24)
-        return Status.objects.filter(created_at__gte=twenty_four_hours_ago).order_by('-created_at')
+        now = timezone.now()
+        twenty_four_hours_ago = now - timedelta(hours=24)
+        # Permanently delete all statuses older than 24 hours from the database
+        Status.objects.filter(created_at__lt=twenty_four_hours_ago).delete()
+        return Status.objects.filter(created_at__gte=twenty_four_hours_ago).order_by('created_at')
 
     def perform_create(self, serializer):
         metadata = self.request.data.get('metadata')
@@ -915,4 +998,286 @@ class StatusViewSet(viewsets.ModelViewSet):
         if status_obj.user != request.user:
             StatusView.objects.get_or_create(status=status_obj, viewer=request.user)
         return Response({'status': 'ok', 'view_count': status_obj.views.count()})
+
+@api_view(['POST'])
+def react_message(request):
+    message_id = request.data.get('message_id')
+    is_group = request.data.get('is_group', False)
+    emoji = request.data.get('emoji')
+
+    if is_group:
+        msg = GroupMessage.objects.filter(id=message_id).first()
+    else:
+        msg = Message.objects.filter(id=message_id).first()
+
+    if not msg:
+        return Response({'error': 'Message not found'}, status=status.HTTP_404_NOT_FOUND)
+
+    meta = msg.metadata or {}
+    reactions = meta.get('reactions', {})
+
+    # Remove existing reaction from this user if any
+    for e in list(reactions.keys()):
+        reactions[e] = [u for u in reactions[e] if u != request.user.username]
+        if not reactions[e]:
+            del reactions[e]
+
+    if emoji:
+        if emoji not in reactions:
+            reactions[emoji] = []
+        reactions[emoji].append(request.user.username)
+
+    meta['reactions'] = reactions
+    msg.metadata = meta
+    msg.save()
+
+    serializer = GroupMessageSerializer(msg, context={'request': request}) if is_group else MessageSerializer(msg, context={'request': request})
+
+    from channels.layers import get_channel_layer
+    from asgiref.sync import async_to_sync
+    channel_layer = get_channel_layer()
+    group_name = f'chat_group_{msg.group.id}' if is_group else f'chat_conv_{msg.conversation.id}'
+    async_to_sync(channel_layer.group_send)(
+        group_name,
+        {
+            'type': 'chat_message_updated',
+            'message': serializer.data
+        }
+    )
+
+    return Response(serializer.data)
+
+@api_view(['PATCH'])
+def edit_message(request, pk):
+    is_group = request.data.get('is_group', False)
+    new_content = request.data.get('content', '').strip()
+
+    if is_group:
+        msg = GroupMessage.objects.filter(id=pk).first()
+    else:
+        msg = Message.objects.filter(id=pk).first()
+
+    if not msg:
+        return Response({'error': 'Message not found'}, status=status.HTTP_404_NOT_FOUND)
+
+    if msg.sender != request.user:
+        return Response({'error': 'Permission denied'}, status=status.HTTP_403_FORBIDDEN)
+
+    if msg.is_deleted:
+        return Response({'error': 'Cannot edit a deleted message'}, status=status.HTTP_400_BAD_REQUEST)
+
+    # Check 15 minute limit
+    from django.utils import timezone
+    now = timezone.now()
+    if (now - msg.timestamp).total_seconds() > 900:
+        return Response({'error': 'Editing window (15 minutes) has expired'}, status=status.HTTP_400_BAD_REQUEST)
+
+    meta = dict(msg.metadata) if isinstance(msg.metadata, dict) else {}
+    if 'original_content' not in meta or not meta['original_content']:
+        meta['original_content'] = msg.content
+
+    edit_history = list(meta.get('edit_history', []))
+    edit_history.append({
+        'from': msg.content,
+        'to': new_content,
+        'timestamp': now.isoformat()
+    })
+    meta['edit_history'] = edit_history
+    msg.metadata = meta
+
+    msg.content = new_content
+    msg.is_edited = True
+    msg.save()
+
+    serializer = GroupMessageSerializer(msg, context={'request': request}) if is_group else MessageSerializer(msg, context={'request': request})
+
+    from channels.layers import get_channel_layer
+    from asgiref.sync import async_to_sync
+    channel_layer = get_channel_layer()
+    group_name = f'chat_group_{msg.group.id}' if is_group else f'chat_conv_{msg.conversation.id}'
+    async_to_sync(channel_layer.group_send)(
+        group_name,
+        {
+            'type': 'chat_message_updated',
+            'message': serializer.data
+        }
+    )
+
+    return Response(serializer.data)
+
+@api_view(['POST'])
+def toggle_star_message(request):
+    message_id = request.data.get('message_id')
+    is_group = request.data.get('is_group', False)
+
+    if is_group:
+        msg = GroupMessage.objects.filter(id=message_id).first()
+    else:
+        msg = Message.objects.filter(id=message_id).first()
+
+    if not msg:
+        msg = GroupMessage.objects.filter(id=message_id).first() or Message.objects.filter(id=message_id).first()
+
+    if not msg:
+        return Response({'error': 'Message not found'}, status=status.HTTP_404_NOT_FOUND)
+
+    if msg.starred_by.filter(id=request.user.id).exists():
+        msg.starred_by.remove(request.user)
+        is_starred = False
+    else:
+        msg.starred_by.add(request.user)
+        is_starred = True
+
+    return Response({'status': 'ok', 'is_starred': is_starred})
+
+@api_view(['GET'])
+def get_starred_messages(request):
+    direct_msgs = Message.objects.filter(starred_by=request.user).exclude(deleted_by=request.user)
+    group_msgs = GroupMessage.objects.filter(starred_by=request.user).exclude(deleted_by=request.user)
+
+    direct_data = MessageSerializer(direct_msgs, many=True, context={'request': request}).data
+    for d in direct_data:
+        d['is_group'] = False
+
+    group_data = GroupMessageSerializer(group_msgs, many=True, context={'request': request}).data
+    for g in group_data:
+        g['is_group'] = True
+
+    all_starred = sorted(direct_data + group_data, key=lambda x: x['timestamp'], reverse=True)
+    return Response(all_starred)
+
+@api_view(['POST'])
+def update_disappearing(request):
+    target_id = request.data.get('target_id')
+    is_group = request.data.get('is_group', False)
+    duration = int(request.data.get('duration', 0))
+
+    if is_group:
+        obj = Group.objects.filter(id=target_id).first()
+    else:
+        obj = Conversation.objects.filter(id=target_id).first()
+
+    if not obj:
+        return Response({'error': 'Chat not found'}, status=status.HTTP_404_NOT_FOUND)
+
+    obj.disappearing_duration = duration
+    obj.save()
+
+    from channels.layers import get_channel_layer
+    from asgiref.sync import async_to_sync
+    channel_layer = get_channel_layer()
+    group_name = f'chat_group_{obj.id}' if is_group else f'chat_conv_{obj.id}'
+    async_to_sync(channel_layer.group_send)(
+        group_name,
+        {
+            'type': 'chat_event',
+            'event': {'type': 'disappearing_updated', 'duration': duration, 'by': request.user.username}
+        }
+    )
+
+    return Response({'status': 'ok', 'disappearing_duration': duration})
+
+def process_scheduled_messages():
+    from django.utils import timezone
+    from channels.layers import get_channel_layer
+    from asgiref.sync import async_to_sync
+
+    now = timezone.now()
+    due = ScheduledMessage.objects.filter(is_sent=False, scheduled_at__lte=now)
+    if not due.exists():
+        return
+
+    channel_layer = get_channel_layer()
+
+    for item in due:
+        try:
+            if item.conversation:
+                msg = Message.objects.create(
+                    conversation=item.conversation,
+                    sender=item.sender,
+                    content=item.content
+                )
+                serializer = MessageSerializer(msg)
+                group_name = f'chat_conv_{item.conversation.id}'
+            elif item.group:
+                msg = GroupMessage.objects.create(
+                    group=item.group,
+                    sender=item.sender,
+                    content=item.content
+                )
+                serializer = GroupMessageSerializer(msg)
+                group_name = f'chat_group_{item.group.id}'
+            else:
+                continue
+
+            item.is_sent = True
+            item.save()
+
+            async_to_sync(channel_layer.group_send)(
+                group_name,
+                {
+                    'type': 'chat_message',
+                    'message': serializer.data
+                }
+            )
+        except Exception as e:
+            print("Failed dispatching scheduled message:", e)
+
+@api_view(['GET', 'POST', 'DELETE'])
+def schedule_message(request, pk=None):
+    process_scheduled_messages()
+
+    if request.method == 'GET':
+        scheduled = ScheduledMessage.objects.filter(sender=request.user, is_sent=False)
+        serializer = ScheduledMessageSerializer(scheduled, many=True)
+        return Response(serializer.data)
+
+    elif request.method == 'POST':
+        content = request.data.get('content', '').strip()
+        scheduled_at_str = request.data.get('scheduled_at')
+        target_id = request.data.get('target_id')
+        is_group = request.data.get('is_group', False)
+
+        if not content:
+            return Response({'error': 'Message content is required'}, status=status.HTTP_400_BAD_REQUEST)
+        if not scheduled_at_str:
+            return Response({'error': 'scheduled_at timestamp is required'}, status=status.HTTP_400_BAD_REQUEST)
+
+        from django.utils.dateparse import parse_datetime
+        from django.utils import timezone
+        scheduled_at = parse_datetime(scheduled_at_str)
+        if not scheduled_at:
+            return Response({'error': 'Invalid date/time format'}, status=status.HTTP_400_BAD_REQUEST)
+
+        if scheduled_at <= timezone.now():
+            return Response({'error': 'Scheduled time must be in the future.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        conversation = None
+        group = None
+        if is_group:
+            group = Group.objects.filter(id=target_id).first()
+        else:
+            conversation = Conversation.objects.filter(id=target_id).first()
+
+        if not conversation and not group:
+            return Response({'error': 'Target chat not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        item = ScheduledMessage.objects.create(
+            sender=request.user,
+            conversation=conversation,
+            group=group,
+            content=content,
+            scheduled_at=scheduled_at
+        )
+
+        serializer = ScheduledMessageSerializer(item)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+    elif request.method == 'DELETE':
+        item = ScheduledMessage.objects.filter(id=pk, sender=request.user, is_sent=False).first()
+        if not item:
+            return Response({'error': 'Scheduled message not found'}, status=status.HTTP_404_NOT_FOUND)
+        item.delete()
+        return Response({'status': 'deleted'})
+
 

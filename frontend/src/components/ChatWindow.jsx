@@ -5,9 +5,15 @@ import VoiceMessagePlayer from './VoiceMessagePlayer';
 import AttachmentMenu from './AttachmentMenu';
 import AttachmentModals from './AttachmentModals';
 import MediaPicker from './MediaPicker';
+import ImagePreviewEditor from './ImagePreviewEditor';
+import StarredMessagesModal from './StarredMessagesModal';
+import ScheduleMessageModal from './ScheduleMessageModal';
+import DocumentPreviewModal from './DocumentPreviewModal';
 import { useContacts } from '../contexts/ContactsContext';
 import { useAlert } from '../contexts/AlertContext';
-import { Phone, Video, Search, MoreVertical, Plus, Smile, Mic, Send, X, UserPlus, Info, CheckSquare, Bell, BellOff, Star, Ban, Eraser, LogOut, Trash2, Check, CheckCheck } from 'lucide-react';
+import { Phone, Video, Search, MoreVertical, Plus, Smile, Mic, Send, X, UserPlus, Info, CheckSquare, Bell, BellOff, Star, Ban, Eraser, LogOut, Trash2, Check, CheckCheck, Lock, Reply, Forward, Clock, FileText, FileSpreadsheet, FileCode, Eye } from 'lucide-react';
+import { getChatKey, isChatLocked } from '../utils/chatLock';
+import { playMessageNotificationSound, playSentMessageSound } from '../utils/soundEffects';
 
 function ChatWindow({ user, chat, onUpdateChat, onLogout, onStartCall, conversations = [], groups = [], onCloseChat, className = '' }) {
   const { getDisplayName } = useContacts();
@@ -16,6 +22,8 @@ function ChatWindow({ user, chat, onUpdateChat, onLogout, onStartCall, conversat
   const [showScrollDown, setShowScrollDown] = useState(false);
   const [newMessage, setNewMessage] = useState('');
   const [selectedFile, setSelectedFile] = useState(null);
+  const [imagePreviewFile, setImagePreviewFile] = useState(null);
+  const [viewingStatusPreview, setViewingStatusPreview] = useState(null);
   const [isRecording, setIsRecording] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
   const [showInfo, setShowInfo] = useState(false);
@@ -30,10 +38,25 @@ function ChatWindow({ user, chat, onUpdateChat, onLogout, onStartCall, conversat
   const [typingUser, setTypingUser] = useState('');
   const [showAttachmentMenu, setShowAttachmentMenu] = useState(false);
   const [showHeaderMenu, setShowHeaderMenu] = useState(false);
+  const [showStarredModal, setShowStarredModal] = useState(false);
+  const [showScheduleModal, setShowScheduleModal] = useState(false);
   const [activeModal, setActiveModal] = useState(null);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [forwardingMessage, setForwardingMessage] = useState(null);
   const [viewingVotesModal, setViewingVotesModal] = useState(null);
+  const [viewingDocumentModal, setViewingDocumentModal] = useState(null);
+  const [pendingPreSendDocument, setPendingPreSendDocument] = useState(null);
+  const [selectedFileIsHD, setSelectedFileIsHD] = useState(false);
+
+  const [isMobileView, setIsMobileView] = useState(() => typeof window !== 'undefined' && window.innerWidth <= 768);
+
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobileView(window.innerWidth <= 768);
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
   
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedMessages, setSelectedMessages] = useState([]);
@@ -47,7 +70,7 @@ function ChatWindow({ user, chat, onUpdateChat, onLogout, onStartCall, conversat
   const timerIntervalRef = useRef(null);
   const typingTimeoutRef = useRef(null);
 
-  const isGroup = chat.isGroup;
+  const isGroup = Boolean(chat.isGroup || chat.is_group || chat.members || (chat.name && !chat.participants));
 
   const renderFormattedContent = (content, size = 18) => {
     if (!content) return null;
@@ -147,9 +170,15 @@ function ChatWindow({ user, chat, onUpdateChat, onLogout, onStartCall, conversat
           updated_at: new Date().toISOString()
         });
         
-        // Auto-read if at the bottom
-        if (data.message.sender.username !== user?.username && shouldAutoScroll.current) {
-          api.post(isGroup ? `chat/groups/${chat.id}/read/` : `chat/conversations/${chat.id}/read/`).catch(console.error);
+        // Sound & Auto-read if at the bottom
+        const senderUsername = data.message.sender?.username || data.message.sender;
+        const senderId = data.message.sender?.id || data.message.sender;
+        const isFromMe = senderId === user?.id || senderUsername === user?.username;
+        if (!isFromMe) {
+          playMessageNotificationSound();
+          if (shouldAutoScroll.current) {
+            api.post(isGroup ? `chat/groups/${chat.id}/read/` : `chat/conversations/${chat.id}/read/`).catch(console.error);
+          }
         }
       } else if (data.type === 'message_update') {
         setMessages(prev => prev.map(m => m.id === data.message.id ? data.message : m));
@@ -206,17 +235,44 @@ function ChatWindow({ user, chat, onUpdateChat, onLogout, onStartCall, conversat
 
       if (isMedia && file.size > maxMediaSize) {
         showAlert('⚠️ Video / Media Too Large!', `The selected file (${(file.size / (1024 * 1024)).toFixed(1)} MB) exceeds the maximum allowed video/media limit of 50 MB.`);
-        e.target.value = ''; // Reset file input
+        e.target.value = '';
         return;
       }
       if (!isMedia && file.size > maxDocSize) {
         showAlert('⚠️ Document Too Large!', `The selected document (${(file.size / (1024 * 1024)).toFixed(1)} MB) exceeds the maximum allowed document limit of 100 MB.`);
-        e.target.value = ''; // Reset file input
+        e.target.value = '';
         return;
       }
 
-      setSelectedFile(file);
+      // Open image editor for images, open document preview modal for documents/files
+      if (file.type.startsWith('image/')) {
+        setImagePreviewFile(file);
+        e.target.value = '';
+      } else {
+        setPendingPreSendDocument(file);
+        e.target.value = '';
+      }
     }
+  };
+
+  const handleDocumentPreSend = (fileObj, caption) => {
+    setSelectedFile(fileObj);
+    if (caption && caption.trim()) setNewMessage(caption);
+    setPendingPreSendDocument(null);
+    setTimeout(() => {
+      document.getElementById('chat-send-btn')?.click();
+    }, 50);
+  };
+
+  const handleImageEditorSend = (editedFile, caption, isHD) => {
+    setSelectedFile(editedFile);
+    setSelectedFileIsHD(Boolean(isHD));
+    if (caption && caption.trim()) setNewMessage(caption);
+    setImagePreviewFile(null);
+    // Auto-submit immediately
+    setTimeout(() => {
+      document.getElementById('chat-send-btn')?.click();
+    }, 50);
   };
 
   const startRecording = async () => {
@@ -282,6 +338,7 @@ function ChatWindow({ user, chat, onUpdateChat, onLogout, onStartCall, conversat
       const formData = new FormData();
       if (newMessage.trim()) formData.append('content', newMessage);
       if (selectedFile) formData.append('file', selectedFile);
+      if (selectedFileIsHD) formData.append('metadata', JSON.stringify({ is_hd: true }));
       if (replyingTo) formData.append('reply_to', replyingTo.id);
       if (isGroup) {
         formData.append('group', chat.id);
@@ -298,8 +355,10 @@ function ChatWindow({ user, chat, onUpdateChat, onLogout, onStartCall, conversat
         if (prev.find(m => m.id === res.data.id)) return prev;
         return [...prev, res.data];
       });
+      playSentMessageSound();
       setNewMessage('');
       setSelectedFile(null);
+      setSelectedFileIsHD(false);
       setReplyingTo(null);
       onUpdateChat({
         ...chat,
@@ -370,48 +429,178 @@ function ChatWindow({ user, chat, onUpdateChat, onLogout, onStartCall, conversat
 
   const handleForwardSubmit = async (selectedChats, selectedGroups) => {
     try {
-      await api.post('chat/forward_message/', {
-        message_id: forwardingMessage.id,
-        is_group_message: isGroup,
-        target_conversations: selectedChats,
-        target_groups: selectedGroups
-      });
+      const msgsToForward = Array.isArray(forwardingMessage) ? forwardingMessage : [forwardingMessage];
+      for (const msg of msgsToForward) {
+        if (!msg) continue;
+        await api.post('chat/forward_message/', {
+          message_id: msg.id,
+          is_group_message: isGroup,
+          target_conversations: selectedChats,
+          target_groups: selectedGroups
+        });
+      }
       setForwardingMessage(null);
       setActiveMessageMenu(null);
+      setSelectionMode(false);
+      setSelectedMessages([]);
     } catch (err) {
       console.error('Failed to forward message', err);
     }
   };
 
-  const handleDeleteMessage = async (msgId) => {
-    const confirmed = await showConfirm('Delete Message', 'Delete this message?', 'Delete');
+  const handleDeleteForMe = async (msgId) => {
+    const confirmed = await showConfirm('Delete for Me', 'This message will be removed from your view only. Others can still see it.', 'Delete');
     if (!confirmed) return;
     try {
       const endpoint = isGroup 
-        ? `chat/groups/${chat.id}/messages/${msgId}/` 
-        : `chat/conversations/${chat.id}/messages/${msgId}/`;
-      await api.delete(endpoint);
+        ? `chat/groups/${chat.id}/messages/${msgId}/delete_for_me/` 
+        : `chat/conversations/${chat.id}/messages/${msgId}/delete_for_me/`;
+      await api.post(endpoint);
+      setMessages(prev => prev.filter(m => m.id !== msgId));
       setActiveMessageMenu(null);
     } catch (err) {
-      console.error('Failed to delete message', err);
+      console.error('Failed to delete message for me', err);
     }
   };
 
-  const handleBulkDelete = async () => {
-    if (selectedMessages.length === 0) return;
-    const confirmed = await showConfirm('Delete Messages', `Delete ${selectedMessages.length} selected message(s)?`, 'Delete');
+  const handleDeleteForEveryone = async (msg) => {
+    // Check 30-minute time limit on frontend too
+    const sentTime = new Date(msg.timestamp);
+    const now = new Date();
+    const diffMs = now - sentTime;
+    const thirtyMinMs = 30 * 60 * 1000;
+
+    if (diffMs > thirtyMinMs) {
+      showAlert('⏰ Time Expired', 'You can only delete for everyone within 30 minutes of sending the message.');
+      return;
+    }
+
+    const confirmed = await showConfirm('Delete for Everyone', 'This message will be deleted for all participants.', 'Delete');
     if (!confirmed) return;
     try {
-      for (const msgId of selectedMessages) {
-          const endpoint = isGroup 
-            ? `chat/groups/${chat.id}/messages/${msgId}/` 
-            : `chat/conversations/${chat.id}/messages/${msgId}/`;
-          await api.delete(endpoint);
-      }
-      setSelectionMode(false);
-      setSelectedMessages([]);
+      const endpoint = isGroup 
+        ? `chat/groups/${chat.id}/messages/${msg.id}/` 
+        : `chat/conversations/${chat.id}/messages/${msg.id}/`;
+      await api.delete(endpoint);
+      setActiveMessageMenu(null);
     } catch (err) {
-      console.error('Failed to bulk delete', err);
+      if (err.response?.data?.error) {
+        showAlert('Cannot Delete', err.response.data.error);
+      }
+      console.error('Failed to delete message for everyone', err);
+    }
+  };
+
+  const canEditMessage = (msg) => {
+    if (!msg || msg.sender?.id !== user?.id || msg.is_deleted) return false;
+    const sentTime = new Date(msg.timestamp);
+    const now = new Date();
+    return (now - sentTime) <= 15 * 60 * 1000;
+  };
+
+  const handleReactToMessage = async (msgId, emoji) => {
+    try {
+      const res = await api.post('chat/messages/react/', {
+        message_id: msgId,
+        is_group: isGroup,
+        emoji: emoji
+      });
+      setMessages(prev => prev.map(m => m.id === msgId ? res.data : m));
+    } catch (err) {
+      console.error('Failed to react to message', err);
+    }
+  };
+
+  const handleToggleStarMessage = async (msgId) => {
+    try {
+      const res = await api.post('chat/messages/star/', {
+        message_id: msgId,
+        is_group: isGroup
+      });
+      setMessages(prev => prev.map(m => m.id === msgId ? { ...m, is_starred: res.data.is_starred } : m));
+      showToast(res.data.is_starred ? 'Message starred! ⭐' : 'Message unstarred');
+    } catch (err) {
+      console.error('Failed to star message', err);
+    }
+  };
+
+  const [disappearingModal, setDisappearingModal] = useState(false);
+
+  const handleSetDisappearing = async (duration) => {
+    try {
+      await api.post('chat/disappearing/', {
+        target_id: chat.id,
+        is_group: isGroup,
+        duration: duration
+      });
+      onUpdateChat({ ...chat, disappearing_duration: duration });
+      setDisappearingModal(false);
+      showToast(duration === 0 ? 'Disappearing messages off' : 'Disappearing messages updated!');
+    } catch (err) {
+      console.error('Failed to set disappearing duration', err);
+    }
+  };
+
+  const canDeleteForEveryone = (msg) => {
+    if (!msg || msg.sender?.id !== user?.id) return false;
+    const sentTime = new Date(msg.timestamp);
+    const now = new Date();
+    return (now - sentTime) <= 30 * 60 * 1000;
+  };
+
+  const [showBulkDeleteModal, setShowBulkDeleteModal] = useState(false);
+
+  const canBulkDeleteForEveryone = () => {
+    if (selectedMessages.length === 0) return false;
+    const now = new Date();
+    const thirtyMinMs = 30 * 60 * 1000;
+    return selectedMessages.every(msgId => {
+      const msg = messages.find(m => m.id === msgId);
+      if (!msg) return false;
+      if (msg.sender?.id !== user?.id) return false;
+      if (msg.is_deleted) return false;
+      return (now - new Date(msg.timestamp)) <= thirtyMinMs;
+    });
+  };
+
+  const handleBulkDeleteForMe = async () => {
+    setShowBulkDeleteModal(false);
+    if (selectedMessages.length === 0) return;
+    const idsToDelete = [...selectedMessages];
+    setSelectionMode(false);
+    setSelectedMessages([]);
+    setMessages(prev => prev.filter(m => !idsToDelete.includes(m.id)));
+    try {
+      await Promise.all(idsToDelete.map(msgId => {
+        const endpoint = isGroup 
+          ? `chat/groups/${chat.id}/messages/${msgId}/delete_for_me/` 
+          : `chat/conversations/${chat.id}/messages/${msgId}/delete_for_me/`;
+        return api.post(endpoint);
+      }));
+    } catch (err) {
+      console.error('Failed to bulk delete for me', err);
+    }
+  };
+
+  const handleBulkDeleteForEveryone = async () => {
+    setShowBulkDeleteModal(false);
+    if (selectedMessages.length === 0) return;
+    const idsToDelete = [...selectedMessages];
+    setSelectionMode(false);
+    setSelectedMessages([]);
+    setMessages(prev => prev.map(m => idsToDelete.includes(m.id) ? { ...m, is_deleted: true, content: '', file: null } : m));
+    try {
+      await Promise.all(idsToDelete.map(msgId => {
+        const endpoint = isGroup 
+          ? `chat/groups/${chat.id}/messages/${msgId}/` 
+          : `chat/conversations/${chat.id}/messages/${msgId}/`;
+        return api.delete(endpoint);
+      }));
+    } catch (err) {
+      if (err.response?.data?.error) {
+        showAlert('Cannot Delete', err.response.data.error);
+      }
+      console.error('Failed to bulk delete for everyone', err);
     }
   };
 
@@ -483,29 +672,75 @@ function ChatWindow({ user, chat, onUpdateChat, onLogout, onStartCall, conversat
     }
   };
 
-  const renderFile = (fileUrl) => {
+  const renderFile = (fileUrl, metadata) => {
     if (!fileUrl) return null;
     let urlStr = typeof fileUrl === 'string' ? fileUrl : (fileUrl.url || fileUrl.name || String(fileUrl));
     const fullUrl = getMediaUrl(urlStr);
     const isImage = urlStr.match(/\.(jpeg|jpg|gif|png|webp)$/i) != null;
     const isAudio = urlStr.match(/\.(webm|mp3|ogg|wav)$/i) != null;
-    
+    const isHD = Boolean(metadata?.is_hd);
+
     if (isImage) {
       return (
-        <img 
-          src={fullUrl} 
-          alt="attachment" 
-          style={{ maxWidth: '300px', maxHeight: '300px', objectFit: 'cover', borderRadius: '8px', marginTop: '5px', cursor: 'pointer' }} 
-          onClick={() => setPreviewImage(fullUrl)}
-        />
+        <div style={{ position: 'relative', display: 'inline-block', marginTop: '5px' }}>
+          <img 
+            src={fullUrl} 
+            alt="attachment" 
+            style={{ maxWidth: '300px', maxHeight: '300px', objectFit: 'cover', borderRadius: '8px', cursor: 'pointer', display: 'block' }} 
+            onClick={() => setPreviewImage(fullUrl)}
+          />
+          {isHD && (
+            <div 
+              title="HD Quality Photo"
+              style={{
+                position: 'absolute', top: '8px', left: '8px',
+                backgroundColor: 'rgba(0, 0, 0, 0.65)', color: 'white',
+                border: '1.5px solid rgba(255, 255, 255, 0.9)', borderRadius: '4px',
+                padding: '1px 5px', fontSize: '10px', fontWeight: '900',
+                boxShadow: '0 2px 6px rgba(0,0,0,0.4)', pointerEvents: 'none',
+                letterSpacing: '0.5px'
+              }}
+            >
+              HD
+            </div>
+          )}
+        </div>
       );
     } else if (isAudio) {
       return <VoiceMessagePlayer src={fullUrl} />;
     } else {
+      const fileName = urlStr.split('/').pop();
+      const ext = fileName.split('.').pop().toLowerCase();
+
+      const getDocIcon = () => {
+        if (['xls', 'xlsx', 'csv'].includes(ext)) return <FileSpreadsheet size={26} color="#22c55e" />;
+        if (['doc', 'docx', 'txt', 'rtf', 'pdf'].includes(ext)) return <FileText size={26} color="#3b82f6" />;
+        return <FileCode size={26} color="#eab308" />;
+      };
+
       return (
-        <a href={fullUrl} target="_blank" rel="noopener noreferrer" style={{ display: 'inline-block', marginTop: '5px', padding: '8px 12px', backgroundColor: 'rgba(0,0,0,0.1)', borderRadius: '8px', color: 'inherit', textDecoration: 'none' }}>
-          📄 Download Attachment
-        </a>
+        <div 
+          style={{
+            display: 'flex', alignItems: 'center', gap: '12px', marginTop: '6px',
+            padding: '10px 14px', backgroundColor: 'rgba(0,0,0,0.18)', borderRadius: '10px',
+            border: '1px solid rgba(255,255,255,0.12)', cursor: 'pointer', transition: 'all 0.2s'
+          }} 
+          onClick={() => setViewingDocumentModal({ url: urlStr, name: fileName })}
+          title="Click to preview document"
+        >
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            {getDocIcon()}
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
+            <span style={{ fontSize: '13px', fontWeight: '600', color: 'inherit', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              {fileName}
+            </span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '11px', opacity: 0.85, marginTop: '2px' }}>
+              <span>Preview document</span>
+              <Eye size={12} />
+            </div>
+          </div>
+        </div>
       );
     }
   };
@@ -546,13 +781,48 @@ function ChatWindow({ user, chat, onUpdateChat, onLogout, onStartCall, conversat
       {selectionMode ? (
         <div className="chat-header" style={{ backgroundColor: 'var(--bg-secondary)', justifyContent: 'space-between' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
-             <button onClick={() => { setSelectionMode(false); setSelectedMessages([]); }} style={{ background: 'none', border: 'none', color: 'var(--text-primary)', cursor: 'pointer', fontSize: '20px' }}>✕</button>
-             <span style={{ fontSize: '18px', color: 'var(--text-primary)' }}>{selectedMessages.length} selected</span>
+             <button onClick={() => { setSelectionMode(false); setSelectedMessages([]); }} style={{ background: 'none', border: 'none', color: 'var(--text-primary)', cursor: 'pointer', fontSize: '20px' }} title="Cancel selection">✕</button>
+             <span style={{ fontSize: '18px', color: 'var(--text-primary)', fontWeight: '500' }}>{selectedMessages.length} selected</span>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '22px' }}>
+             {/* Reply Icon - Only shown when EXACTLY 1 message is selected */}
+             {selectedMessages.length === 1 && (
+               <button 
+                 onClick={() => {
+                   const msgToReply = messages.find(m => m.id === selectedMessages[0]);
+                   if (msgToReply && !msgToReply.is_deleted) {
+                     setReplyingTo(msgToReply);
+                     setSelectionMode(false);
+                     setSelectedMessages([]);
+                   }
+                 }} 
+                 style={{ background: 'none', border: 'none', color: 'var(--text-primary)', cursor: 'pointer', display: 'flex', alignItems: 'center' }} 
+                 title="Reply"
+               >
+                 <Reply size={22} strokeWidth={2.2} />
+               </button>
+             )}
+
+             {/* Forward Icon - Shown when 1 or more messages are selected */}
              {selectedMessages.length > 0 && (
-                <button onClick={handleBulkDelete} style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer' }} title="Delete">
-                  <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"></path></svg>
+               <button 
+                 onClick={() => {
+                   const selectedMsgs = messages.filter(m => selectedMessages.includes(m.id) && !m.is_deleted);
+                   if (selectedMsgs.length > 0) {
+                     setForwardingMessage(selectedMsgs.length === 1 ? selectedMsgs[0] : selectedMsgs);
+                   }
+                 }} 
+                 style={{ background: 'none', border: 'none', color: 'var(--text-primary)', cursor: 'pointer', display: 'flex', alignItems: 'center' }} 
+                 title="Forward"
+               >
+                 <Forward size={22} strokeWidth={2.2} />
+               </button>
+             )}
+
+             {/* Delete Icon - Shown when 1 or more messages are selected */}
+             {selectedMessages.length > 0 && (
+                <button onClick={() => setShowBulkDeleteModal(true)} style={{ background: 'none', border: 'none', color: 'var(--text-primary)', cursor: 'pointer', display: 'flex', alignItems: 'center' }} title="Delete">
+                  <Trash2 size={22} strokeWidth={2.2} />
                 </button>
              )}
           </div>
@@ -627,19 +897,23 @@ function ChatWindow({ user, chat, onUpdateChat, onLogout, onStartCall, conversat
           </button>
           
           <div style={{ position: 'relative' }}>
-            <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)' }} onClick={() => setShowHeaderMenu(!showHeaderMenu)} title="Menu">
+            <button 
+              style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)' }} 
+              onClick={(e) => { e.stopPropagation(); setShowHeaderMenu(!showHeaderMenu); }} 
+              title="Menu"
+            >
               <MoreVertical size={22} strokeWidth={2.2} />
             </button>
             {showHeaderMenu && (
               <>
                 <div 
-                  style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 99 }} 
+                  style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 9999 }} 
                   onClick={(e) => { e.stopPropagation(); setShowHeaderMenu(false); }}
                   onTouchEnd={(e) => { e.stopPropagation(); setShowHeaderMenu(false); }}
                 />
                 <div style={{
-                  position: 'absolute', top: '40px', right: '0', backgroundColor: 'var(--bg-secondary)', borderRadius: '12px',
-                  boxShadow: '0 2px 10px rgba(0,0,0,0.3)', padding: '10px 0', minWidth: '240px', zIndex: 100
+                  position: 'absolute', top: '45px', right: '0', backgroundColor: 'var(--bg-secondary)', borderRadius: '12px',
+                  boxShadow: '0 8px 32px rgba(0,0,0,0.5)', border: '1px solid var(--border-color)', padding: '10px 0', minWidth: '240px', zIndex: 10000
                 }}>
                   {(isGroup ? [
                     { icon: <UserPlus size={18} />, label: 'Add member', onClick: () => { setShowHeaderMenu(false); handleAddMember(); } },
@@ -655,6 +929,9 @@ function ChatWindow({ user, chat, onUpdateChat, onLogout, onStartCall, conversat
                            onUpdateChat({...chat, is_favourite: !chat.is_favourite});
                         });
                     } },
+                    { icon: <Star size={18} fill="#eab308" color="#eab308" />, label: 'Starred messages', onClick: () => { setShowHeaderMenu(false); setShowStarredModal(true); } },
+                    { icon: <Clock size={18} color="#00a884" />, label: 'Schedule message 🕒', onClick: () => { setShowHeaderMenu(false); setShowScheduleModal(true); } },
+                    { icon: <Clock size={18} />, label: 'Disappearing messages', onClick: () => { setShowHeaderMenu(false); setDisappearingModal(true); } },
                     { type: 'divider' },
                     { icon: <Eraser size={18} />, label: 'Clear chat', onClick: async () => {
                         const confirmed = await showConfirm('Clear Chat', 'Clear all messages in this group?', 'Clear');
@@ -671,10 +948,18 @@ function ChatWindow({ user, chat, onUpdateChat, onLogout, onStartCall, conversat
                   ] : [
                     { icon: <Info size={18} />, label: 'Contact info', onClick: () => { setShowHeaderMenu(false); setShowInfo(true); } },
                     { icon: <CheckSquare size={18} />, label: 'Select messages', onClick: () => setSelectionMode(true) },
+                    { icon: <Star size={18} fill="#eab308" color="#eab308" />, label: 'Starred messages', onClick: () => { setShowHeaderMenu(false); setShowStarredModal(true); } },
+                    { icon: <Clock size={18} color="#00a884" />, label: 'Schedule message 🕒', onClick: () => { setShowHeaderMenu(false); setShowScheduleModal(true); } },
+                    { icon: <Clock size={18} />, label: 'Disappearing messages', onClick: () => { setShowHeaderMenu(false); setDisappearingModal(true); } },
                     { icon: chat.is_muted ? <Bell size={18} /> : <BellOff size={18} />, label: chat.is_muted ? 'Unmute notifications' : 'Mute notifications', onClick: () => {
                         api.post(`chat/conversations/${chat.id}/toggle_mute/`).then(() => {
                             onUpdateChat({...chat, is_muted: !chat.is_muted});
                         });
+                    } },
+                    { icon: <Lock size={18} />, label: isChatLocked(getChatKey(chat)) ? 'Unlock chat 🔓' : 'Lock chat 🔒', onClick: () => {
+                        setShowHeaderMenu(false);
+                        const event = new CustomEvent('chatbox_toggle_chat_lock', { detail: chat });
+                        window.dispatchEvent(event);
                     } },
                     { icon: <Star size={18} />, label: chat.is_favourite ? 'Remove from favourites' : 'Add to favourites', onClick: () => {
                         api.post(`chat/conversations/${chat.id}/toggle_favourite/`).then(() => {
@@ -683,6 +968,7 @@ function ChatWindow({ user, chat, onUpdateChat, onLogout, onStartCall, conversat
                     } },
                     { type: 'divider' },
                     { icon: <Ban size={18} />, label: chat.is_blocked ? 'Unblock' : 'Block', onClick: async () => {
+                        if (!otherParticipant) return;
                         if (chat.is_blocked) {
                             api.post(`users/unblock/${otherParticipant.id}/`).then(() => {
                                 showToast('User unblocked!');
@@ -716,13 +1002,13 @@ function ChatWindow({ user, chat, onUpdateChat, onLogout, onStartCall, conversat
                     ) : (
                       <div 
                         key={i}
-                        style={{ padding: '10px 24px', cursor: 'pointer', color: 'var(--text-primary)', fontSize: '15px', display: 'flex', alignItems: 'center', gap: '15px' }}
-                        onMouseOver={(e) => e.target.style.backgroundColor = 'var(--bg-sidebar)'}
-                        onMouseOut={(e) => e.target.style.backgroundColor = 'transparent'}
+                        style={{ padding: '10px 24px', cursor: 'pointer', color: 'var(--text-primary)', fontSize: '15px', display: 'flex', alignItems: 'center', gap: '15px', transition: 'background-color 0.15s' }}
+                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--bg-sidebar)'}
+                        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
                         onClick={() => { setShowHeaderMenu(false); item.onClick(); }}
                       >
-                        <div style={{ color: 'var(--text-secondary)' }}>{item.icon}</div>
-                        {item.label}
+                        <div style={{ color: 'var(--text-secondary)', display: 'flex', alignItems: 'center' }}>{item.icon}</div>
+                        <span>{item.label}</span>
                       </div>
                     )
                   ))}
@@ -839,6 +1125,8 @@ function ChatWindow({ user, chat, onUpdateChat, onLogout, onStartCall, conversat
           }
           
           const isOut = msg.sender.username === user?.username;
+          const isDeleted = Boolean(msg.is_deleted);
+
           return (
             <div key={msg.id} style={{ display: 'flex', alignItems: 'center', width: '100%', justifyContent: isOut ? 'flex-end' : 'flex-start' }}>
               {selectionMode && (
@@ -849,13 +1137,22 @@ function ChatWindow({ user, chat, onUpdateChat, onLogout, onStartCall, conversat
                     if (selectedMessages.includes(msg.id)) setSelectedMessages(prev => prev.filter(id => id !== msg.id));
                     else setSelectedMessages(prev => [...prev, msg.id]);
                   }}
-                  style={{ marginRight: '15px', width: '20px', height: '20px', cursor: 'pointer' }}
+                  style={{
+                    marginRight: '15px', width: '20px', height: '20px',
+                    cursor: 'pointer'
+                  }}
                 />
               )}
             <div className={`message ${isOut ? 'msg-out' : 'msg-in'}`} style={{ 
               paddingRight: '25px', 
-              ...(selectionMode ? { flex: 1, marginLeft: 0, marginRight: 0 } : {}),
+              ...(selectionMode ? { flex: 1, marginLeft: 0, marginRight: 0, cursor: 'pointer' } : {}),
               ...(msg.message_type === 'sticker' ? { backgroundColor: 'transparent', boxShadow: 'none', border: 'none', paddingRight: '5px' } : {}) 
+            }}
+            onClick={() => {
+              if (selectionMode) {
+                if (selectedMessages.includes(msg.id)) setSelectedMessages(prev => prev.filter(id => id !== msg.id));
+                else setSelectedMessages(prev => [...prev, msg.id]);
+              }
             }}>
               {!selectionMode && <div style={{ position: 'absolute', top: 5, right: 8, cursor: 'pointer', color: 'var(--text-secondary)', fontSize: '16px', opacity: 0.5 }} onClick={() => setActiveMessageMenu(activeMessageMenu === msg.id ? null : msg.id)}>
                 ⌄
@@ -874,19 +1171,49 @@ function ChatWindow({ user, chat, onUpdateChat, onLogout, onStartCall, conversat
                       setActiveMessageMenu(null);
                     }}
                   />
-                  <div style={{ position: 'absolute', top: 25, right: 5, backgroundColor: 'var(--bg-primary)', border: '1px solid var(--border-color)', boxShadow: '0 2px 10px rgba(0,0,0,0.1)', borderRadius: '8px', zIndex: 100, padding: '5px 0', minWidth: '120px' }}>
-                    <div style={{ padding: '8px 20px', cursor: 'pointer', color: 'var(--text-primary)' }} onClick={() => { setReplyingTo(msg); setActiveMessageMenu(null); }}>Reply</div>
-                    {!msg.is_deleted && msg.content && (
-                      <div style={{ padding: '8px 20px', cursor: 'pointer', color: 'var(--text-primary)' }} onClick={() => { navigator.clipboard.writeText(msg.content); setActiveMessageMenu(null); }}>Copy</div>
-                    )}
+                  <div style={{ position: 'absolute', top: 25, [isOut ? 'right' : 'left']: 5, backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--border-color)', boxShadow: '0 8px 24px rgba(0,0,0,0.4)', borderRadius: '10px', zIndex: 1000, padding: '5px 0', minWidth: '180px' }}>
                     {!msg.is_deleted && (
-                      <div style={{ padding: '8px 20px', cursor: 'pointer', color: 'var(--text-primary)' }} onClick={() => { setForwardingMessage(msg); setActiveMessageMenu(null); }}>Forward</div>
+                      <div style={{ display: 'flex', gap: '6px', padding: '6px 12px', borderBottom: '1px solid var(--border-color)', justifyContent: 'space-around' }}>
+                        {['👍', '❤️', '😂', '😢', '😮', '🙏'].map(emoji => (
+                          <span
+                            key={emoji}
+                            onClick={() => { handleReactToMessage(msg.id, emoji); setActiveMessageMenu(null); }}
+                            style={{ cursor: 'pointer', fontSize: '18px', transition: 'transform 0.1s' }}
+                            onMouseOver={e => e.currentTarget.style.transform = 'scale(1.3)'}
+                            onMouseOut={e => e.currentTarget.style.transform = 'scale(1)'}
+                          >
+                            {emoji}
+                          </span>
+                        ))}
+                      </div>
                     )}
-                  {isOut && !msg.is_deleted && (
-                    <>
-                      <div style={{ padding: '8px 20px', cursor: 'pointer', color: 'var(--text-primary)' }} onClick={() => { setEditingMessage(msg); setNewMessage(msg.content); setActiveMessageMenu(null); }}>Edit</div>
-                      <div style={{ padding: '8px 20px', cursor: 'pointer', color: 'var(--danger)' }} onClick={() => handleDeleteMessage(msg.id)}>Delete</div>
-                    </>
+                    {msg.is_deleted ? (
+                      <div style={{ padding: '8px 20px', cursor: 'pointer', color: 'var(--text-secondary)' }} onClick={() => handleDeleteForMe(msg.id)}>Delete for me</div>
+                    ) : (
+                      <>
+                        <div style={{ padding: '8px 20px', cursor: 'pointer', color: 'var(--text-primary)' }} onClick={() => { setReplyingTo(msg); setActiveMessageMenu(null); }}>Reply</div>
+                        <div style={{ padding: '8px 20px', cursor: 'pointer', color: 'var(--text-primary)' }} onClick={() => { handleToggleStarMessage(msg.id); setActiveMessageMenu(null); }}>
+                          {msg.is_starred ? 'Unstar ⭐' : 'Star message ⭐'}
+                        </div>
+                        {msg.content && (
+                          <div style={{ padding: '8px 20px', cursor: 'pointer', color: 'var(--text-primary)' }} onClick={() => { navigator.clipboard.writeText(msg.content); setActiveMessageMenu(null); }}>Copy</div>
+                        )}
+                        <div style={{ padding: '8px 20px', cursor: 'pointer', color: 'var(--text-primary)' }} onClick={() => { setForwardingMessage(msg); setActiveMessageMenu(null); }}>Forward</div>
+                        {isOut && (
+                          <>
+                            {canEditMessage(msg) && (
+                              <div style={{ padding: '8px 20px', cursor: 'pointer', color: 'var(--text-primary)' }} onClick={() => { setEditingMessage(msg); setNewMessage(msg.content); setActiveMessageMenu(null); }}>Edit</div>
+                            )}
+                            <div style={{ padding: '8px 20px', cursor: 'pointer', color: 'var(--text-secondary)' }} onClick={() => handleDeleteForMe(msg.id)}>Delete for me</div>
+                            {canDeleteForEveryone(msg) && (
+                              <div style={{ padding: '8px 20px', cursor: 'pointer', color: 'var(--danger)', fontWeight: '500' }} onClick={() => handleDeleteForEveryone(msg)}>Delete for everyone</div>
+                            )}
+                          </>
+                        )}
+                        {!isOut && (
+                          <div style={{ padding: '8px 20px', cursor: 'pointer', color: 'var(--text-secondary)' }} onClick={() => handleDeleteForMe(msg.id)}>Delete for me</div>
+                        )}
+                      </>
                     )}
                   </div>
                 </>
@@ -905,11 +1232,20 @@ function ChatWindow({ user, chat, onUpdateChat, onLogout, onStartCall, conversat
                       </div>
                     )}
                   {msg.message_type === 'status_reply' && msg.metadata && (
-                    <div style={{
-                      backgroundColor: 'rgba(0, 0, 0, 0.2)', borderLeft: '4px solid #00a884',
-                      borderRadius: '6px', padding: '8px 10px', marginBottom: '8px', display: 'flex',
-                      alignItems: 'center', gap: '10px'
-                    }}>
+                    <div 
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setViewingStatusPreview(msg.metadata);
+                      }}
+                      style={{
+                        backgroundColor: 'rgba(0, 0, 0, 0.25)', borderLeft: '4px solid #00a884',
+                        borderRadius: '6px', padding: '8px 10px', marginBottom: '8px', display: 'flex',
+                        alignItems: 'center', gap: '10px', cursor: 'pointer', transition: 'background-color 0.2s',
+                      }}
+                      title="Click to view status story"
+                      onMouseEnter={e => e.currentTarget.style.backgroundColor = 'rgba(0, 0, 0, 0.35)'}
+                      onMouseLeave={e => e.currentTarget.style.backgroundColor = 'rgba(0, 0, 0, 0.25)'}
+                    >
                       <div style={{ flex: 1, overflow: 'hidden' }}>
                         <div style={{ fontSize: '12px', color: '#00a884', fontWeight: '700', marginBottom: '2px' }}>
                           ⭕ Status {msg.metadata.author ? `• ${msg.metadata.author}` : ''}
@@ -919,12 +1255,27 @@ function ChatWindow({ user, chat, onUpdateChat, onLogout, onStartCall, conversat
                         </div>
                       </div>
                       {msg.metadata.file_url ? (
-                        <img src={msg.metadata.file_url} alt="Status" style={{ width: '42px', height: '42px', borderRadius: '4px', objectFit: 'cover', border: '1px solid rgba(255,255,255,0.2)' }} />
+                        <img src={getMediaUrl(msg.metadata.file_url)} alt="Status" style={{ width: '44px', height: '44px', borderRadius: '6px', objectFit: 'cover', border: '1px solid rgba(255,255,255,0.2)' }} />
                       ) : (
-                        <div style={{ width: '42px', height: '42px', borderRadius: '4px', backgroundColor: msg.metadata.bg_color || '#0b141a', display: 'flex', justifyContent: 'center', alignItems: 'center', color: 'white', fontSize: '14px', fontWeight: 'bold', border: '1px solid rgba(255,255,255,0.2)' }}>
+                        <div style={{ width: '44px', height: '44px', borderRadius: '6px', backgroundColor: msg.metadata.bg_color || '#0b141a', display: 'flex', justifyContent: 'center', alignItems: 'center', color: 'white', fontSize: '14px', fontWeight: 'bold', border: '1px solid rgba(255,255,255,0.2)' }}>
                           📝
                         </div>
                       )}
+                    </div>
+                  )}
+                  {msg.message_type === 'status_reply' && msg.metadata?.reaction_media && (
+                    <div style={{ marginTop: '4px', marginBottom: '4px' }}>
+                      <img 
+                        src={msg.metadata.reaction_media.url} 
+                        alt={msg.metadata.reaction_media.media_type || 'Reaction'} 
+                        style={{ 
+                          maxHeight: msg.metadata.reaction_media.type === 'sticker' ? '140px' : '220px', 
+                          maxWidth: '100%', 
+                          borderRadius: '8px', 
+                          objectFit: 'contain',
+                          display: 'block' 
+                        }} 
+                      />
                     </div>
                   )}
                   {msg.replied_to && (
@@ -935,7 +1286,7 @@ function ChatWindow({ user, chat, onUpdateChat, onLogout, onStartCall, conversat
                       </div>
                     </div>
                   )}
-                  {msg.file && renderFile(msg.file)}
+                  {msg.file && renderFile(msg.file, msg.metadata)}
                   
                   {msg.message_type === 'poll' && msg.metadata && (
                     <div style={{ 
@@ -1151,6 +1502,7 @@ function ChatWindow({ user, chat, onUpdateChat, onLogout, onStartCall, conversat
               )}
               
               <div className="message-time" style={msg.message_type === 'sticker' ? { backgroundColor: 'rgba(0,0,0,0.55)', padding: '2px 7px', borderRadius: '12px', color: '#fff', marginTop: '2px', float: 'right' } : {}}>
+                {msg.is_starred && <Star size={12} fill="#eab308" color="#eab308" style={{ marginRight: '4px', display: 'inline-block', verticalAlign: 'middle' }} />}
                 {msg.is_edited && !msg.is_deleted && <span style={{ marginRight: '5px', fontStyle: 'italic', color: 'var(--text-secondary)' }}>(edited)</span>}
                 {formatTime(msg.timestamp)}
                 {isOut && !isGroup && (
@@ -1160,6 +1512,28 @@ function ChatWindow({ user, chat, onUpdateChat, onLogout, onStartCall, conversat
                 )}
               </div>
             </div>
+            {msg.metadata?.reactions && Object.keys(msg.metadata.reactions).length > 0 && (
+              <div style={{ display: 'flex', gap: '4px', marginTop: '4px', flexWrap: 'wrap', justifyContent: isOut ? 'flex-end' : 'flex-start', width: '100%', padding: '0 8px' }}>
+                {Object.entries(msg.metadata.reactions).map(([emoji, users]) => (
+                  <div 
+                    key={emoji}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      showAlert(`Reactions (${emoji})`, `Reacted by:\n${users.join('\n')}`);
+                    }}
+                    style={{
+                      backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--border-color)',
+                      borderRadius: '12px', padding: '2px 8px', fontSize: '12px', cursor: 'pointer',
+                      display: 'flex', alignItems: 'center', gap: '4px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
+                    }}
+                    title={`Reacted by: ${users.join(', ')}`}
+                  >
+                    <span>{emoji}</span>
+                    <span style={{ fontSize: '11px', fontWeight: 'bold', color: 'var(--text-primary)' }}>{users.length}</span>
+                  </div>
+                ))}
+              </div>
+            )}
             </div>
           );
         })}
@@ -1270,11 +1644,11 @@ function ChatWindow({ user, chat, onUpdateChat, onLogout, onStartCall, conversat
               </div>
               
               <div style={{ position: 'relative' }}>
-                <button type="button" onClick={() => setShowEmojiPicker(!showEmojiPicker)} title="Emojis, GIFs, Stickers" style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <button type="button" onClick={() => setShowEmojiPicker(!showEmojiPicker)} title="Emojis, GIFs, Stickers" style={{ background: 'none', border: 'none', cursor: 'pointer', color: showEmojiPicker ? '#00a884' : 'var(--text-secondary)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                   <Smile size={24} strokeWidth={2.2} />
                 </button>
-                {showEmojiPicker && (
-                  <div style={{ position: 'absolute', bottom: '50px', left: 0, zIndex: 100 }}>
+                {showEmojiPicker && !isMobileView && (
+                  <div style={{ position: 'absolute', bottom: '50px', left: 0, zIndex: 100, width: '360px', height: '420px', borderRadius: '12px', boxShadow: '0 8px 30px rgba(0,0,0,0.35)', border: '1px solid var(--border-color)', overflow: 'hidden' }}>
                     <MediaPicker 
                       onSelectEmoji={(emojiData) => {
                         setNewMessage(prev => prev + emojiData.emoji);
@@ -1310,13 +1684,35 @@ function ChatWindow({ user, chat, onUpdateChat, onLogout, onStartCall, conversat
                   <Mic size={24} strokeWidth={2.2} />
                 </button>
               ) : (
-                <button type="submit" className="send-btn" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <button id="chat-send-btn" type="submit" className="send-btn" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                   <Send size={20} strokeWidth={2.4} />
                 </button>
               )}
             </form>
           )}
         </div>
+
+        {showEmojiPicker && isMobileView && (
+          <div style={{
+            width: '100%', height: '310px', marginTop: '10px',
+            borderTop: '1px solid var(--border-color)', overflow: 'hidden'
+          }}>
+            <MediaPicker 
+              onSelectEmoji={(emojiData) => {
+                setNewMessage(prev => prev + emojiData.emoji);
+              }}
+              onSelectGif={(gif) => {
+                handleSendSpecialMessage('gif', { url: gif.url, title: gif.title });
+                setShowEmojiPicker(false);
+              }}
+              onSelectSticker={(sticker) => {
+                handleSendSpecialMessage('sticker', { url: sticker.url, title: sticker.title });
+                setShowEmojiPicker(false);
+              }}
+              onClose={() => setShowEmojiPicker(false)}
+            />
+          </div>
+        )}
       </div>
       )}
       {showInfo && (
@@ -1369,6 +1765,170 @@ function ChatWindow({ user, chat, onUpdateChat, onLogout, onStartCall, conversat
         />
       )}
 
+      {imagePreviewFile && (
+        <ImagePreviewEditor
+          file={imagePreviewFile}
+          onSend={handleImageEditorSend}
+          onCancel={() => setImagePreviewFile(null)}
+        />
+      )}
+
+      {viewingStatusPreview && (
+        <div 
+          style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.92)', zIndex: 12000, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}
+          onClick={() => setViewingStatusPreview(null)}
+        >
+          <div 
+            style={{ position: 'relative', width: '360px', maxWidth: '90vw', height: '600px', maxHeight: '85vh', backgroundColor: viewingStatusPreview.bg_color || '#0b141a', borderRadius: '16px', overflow: 'hidden', boxShadow: '0 10px 40px rgba(0,0,0,0.6)', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center' }}
+            onClick={e => e.stopPropagation()}
+          >
+            <button 
+              onClick={() => setViewingStatusPreview(null)} 
+              style={{ position: 'absolute', top: '15px', right: '15px', background: 'rgba(0,0,0,0.5)', border: 'none', color: 'white', borderRadius: '50%', width: '32px', height: '32px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 10 }}
+            >
+              <X size={20} />
+            </button>
+
+            <div style={{ position: 'absolute', top: '15px', left: '15px', display: 'flex', alignItems: 'center', gap: '8px', color: 'white', zIndex: 10 }}>
+              <div style={{ fontSize: '14px', fontWeight: 'bold' }}>
+                ⭕ Status • {viewingStatusPreview.author || 'Story'}
+              </div>
+            </div>
+
+            {viewingStatusPreview.file_url ? (
+              <img 
+                src={getMediaUrl(viewingStatusPreview.file_url)} 
+                alt="Status Story" 
+                style={{ width: '100%', height: '100%', objectFit: 'contain' }} 
+              />
+            ) : (
+              <div style={{ padding: '30px', textAlign: 'center', color: 'white', fontSize: '22px', fontWeight: 'bold', wordBreak: 'break-word', lineHeight: '1.4' }}>
+                {viewingStatusPreview.story_content}
+              </div>
+            )}
+
+            {viewingStatusPreview.file_url && viewingStatusPreview.story_content && (
+              <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, padding: '15px 20px', backgroundColor: 'rgba(0,0,0,0.6)', color: 'white', fontSize: '14px', textAlign: 'center' }}>
+                {viewingStatusPreview.story_content}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {showBulkDeleteModal && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.6)', zIndex: 11000, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setShowBulkDeleteModal(false)}>
+          <div style={{ backgroundColor: 'var(--bg-primary)', borderRadius: '16px', padding: '24px', width: '340px', maxWidth: '90%', boxShadow: '0 10px 30px rgba(0,0,0,0.4)', border: '1px solid var(--border-color)' }} onClick={e => e.stopPropagation()}>
+            <h3 style={{ margin: '0 0 8px 0', color: 'var(--text-primary)', fontSize: '17px' }}>
+              Delete {selectedMessages.length} message{selectedMessages.length > 1 ? 's' : ''}?
+            </h3>
+            <p style={{ color: 'var(--text-secondary)', fontSize: '13px', margin: '0 0 20px 0', lineHeight: '1.5' }}>
+              {canBulkDeleteForEveryone() 
+                ? 'All selected messages are within 30 minutes. You can delete for everyone or just for yourself.'
+                : 'Some messages are older than 30 minutes or sent by others. You can only delete for yourself.'}
+            </p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              {canBulkDeleteForEveryone() && (
+                <button
+                  onClick={handleBulkDeleteForEveryone}
+                  style={{
+                    width: '100%', padding: '10px', borderRadius: '24px', border: 'none',
+                    backgroundColor: '#ef4444', color: 'white', fontWeight: '600',
+                    fontSize: '14px', cursor: 'pointer', transition: 'opacity 0.2s',
+                  }}
+                  onMouseEnter={e => e.currentTarget.style.opacity = '0.85'}
+                  onMouseLeave={e => e.currentTarget.style.opacity = '1'}
+                >
+                  Delete for everyone
+                </button>
+              )}
+              <button
+                onClick={handleBulkDeleteForMe}
+                style={{
+                  width: '100%', padding: '10px', borderRadius: '24px',
+                  border: '1px solid var(--border-color)', backgroundColor: 'transparent',
+                  color: 'var(--text-primary)', fontWeight: '500', fontSize: '14px',
+                  cursor: 'pointer', transition: 'background-color 0.2s',
+                }}
+                onMouseEnter={e => e.currentTarget.style.backgroundColor = 'var(--bg-secondary)'}
+                onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
+              >
+                Delete for me
+              </button>
+              <button
+                onClick={() => setShowBulkDeleteModal(false)}
+                style={{
+                  width: '100%', padding: '10px', borderRadius: '24px',
+                  border: 'none', backgroundColor: 'transparent',
+                  color: 'var(--text-secondary)', fontWeight: '500', fontSize: '14px',
+                  cursor: 'pointer',
+                }}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {disappearingModal && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.7)', display: 'flex',
+          alignItems: 'center', justifyContent: 'center', zIndex: 9999,
+          backdropFilter: 'blur(4px)'
+        }}>
+          <div style={{
+            width: '380px', backgroundColor: 'var(--bg-secondary)', borderRadius: '12px',
+            padding: '24px', border: '1px solid var(--border-color)', boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
+            color: 'var(--text-primary)'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '16px' }}>
+              <Clock size={24} color="#00a884" />
+              <h3 style={{ margin: 0, fontSize: '18px' }}>Disappearing Messages</h3>
+            </div>
+            <p style={{ fontSize: '14px', color: 'var(--text-secondary)', marginBottom: '20px', lineHeight: '1.4' }}>
+              For more privacy and storage, all new messages in this chat will disappear after the selected duration.
+            </p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              {[
+                { label: '24 Hours', duration: 86400 },
+                { label: '7 Days', duration: 604800 },
+                { label: '30 Days', duration: 2592000 },
+                { label: 'Off', duration: 0 }
+              ].map(opt => (
+                <button
+                  key={opt.duration}
+                  onClick={() => handleSetDisappearing(opt.duration)}
+                  style={{
+                    padding: '12px 16px', borderRadius: '8px', border: '1px solid var(--border-color)',
+                    backgroundColor: (chat.disappearing_duration || 0) === opt.duration ? '#00a884' : 'var(--bg-primary)',
+                    color: (chat.disappearing_duration || 0) === opt.duration ? 'white' : 'var(--text-primary)',
+                    fontWeight: '600', cursor: 'pointer', textAlign: 'left', display: 'flex',
+                    alignItems: 'center', justifyContent: 'space-between'
+                  }}
+                >
+                  <span>{opt.label}</span>
+                  {(chat.disappearing_duration || 0) === opt.duration && <span>✓</span>}
+                </button>
+              ))}
+            </div>
+            <div style={{ marginTop: '20px', textAlign: 'right' }}>
+              <button
+                onClick={() => setDisappearingModal(false)}
+                style={{ padding: '8px 20px', borderRadius: '20px', border: 'none', backgroundColor: 'var(--bg-primary)', color: 'var(--text-secondary)', cursor: 'pointer' }}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <StarredMessagesModal isOpen={showStarredModal} onClose={() => setShowStarredModal(false)} />
+      <ScheduleMessageModal isOpen={showScheduleModal} onClose={() => setShowScheduleModal(false)} chat={chat} isGroup={isGroup} onScheduled={() => showToast('Message scheduled successfully! 🕒')} />
+      <DocumentPreviewModal fileUrl={viewingDocumentModal?.url} fileName={viewingDocumentModal?.name} onClose={() => setViewingDocumentModal(null)} />
+      <DocumentPreviewModal file={pendingPreSendDocument} onClose={() => setPendingPreSendDocument(null)} onSend={handleDocumentPreSend} />
       <style>{`
         @keyframes pulse {
           0% { transform: scale(1); opacity: 1; }

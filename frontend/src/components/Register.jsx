@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
+import { Eye, EyeOff } from 'lucide-react';
 import api from '../api';
 
 function Register({ onLogin }) {
@@ -9,6 +10,7 @@ function Register({ onLogin }) {
     phone_number: '',
     status_message: 'Hey there! I am using WhatsApp Clone.'
   });
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
 
   const handleChange = (e) => {
@@ -59,13 +61,35 @@ function Register({ onLogin }) {
           </div>
           <div className="input-group">
             <label>Password</label>
-            <input 
-              type="password" 
-              name="password"
-              value={formData.password} 
-              onChange={handleChange} 
-              required 
-            />
+            <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+              <input 
+                type={showPassword ? "text" : "password"} 
+                name="password"
+                value={formData.password} 
+                onChange={handleChange} 
+                required 
+                style={{ width: '100%', paddingRight: '40px' }}
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                title={showPassword ? "Hide password" : "Show password"}
+                style={{
+                  position: 'absolute',
+                  right: '10px',
+                  background: 'none',
+                  border: 'none',
+                  color: 'var(--text-secondary)',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  padding: '4px'
+                }}
+              >
+                {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+              </button>
+            </div>
           </div>
           <div className="input-group">
             <label>Phone Number</label>

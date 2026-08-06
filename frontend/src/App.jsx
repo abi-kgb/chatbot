@@ -12,7 +12,7 @@ import api from './api';
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(!!localStorage.getItem('access_token'));
   const [user, setUser] = useState(null);
-  const [isAppLocked, setIsAppLocked] = useState(!!localStorage.getItem('chatbox_app_lock_hash'));
+  const [isAppLocked, setIsAppLocked] = useState(localStorage.getItem('chatbox_app_lock_enabled') === 'true');
   const [showAppLockSetup, setShowAppLockSetup] = useState(false);
 
   useEffect(() => {
@@ -48,7 +48,7 @@ function App() {
 
   const handleLogout = () => {
     localStorage.removeItem('access_token');
-    localStorage.removeItem('chatbox_app_lock_hash');
+    localStorage.removeItem('chatbox_app_lock_enabled');
     setIsAuthenticated(false);
     setUser(null);
     setIsAppLocked(false);
@@ -56,6 +56,7 @@ function App() {
 
   const handleRequestAppLock = () => {
     if (localStorage.getItem('chatbox_app_lock_hash')) {
+      localStorage.setItem('chatbox_app_lock_enabled', 'true');
       setIsAppLocked(true);
     } else {
       setShowAppLockSetup(true);

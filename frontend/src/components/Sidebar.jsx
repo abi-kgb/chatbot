@@ -1,8 +1,10 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import api, { getMediaUrl } from '../api';
 import { useContacts } from '../contexts/ContactsContext';
 import { useAlert } from '../contexts/AlertContext';
-import { Video, Phone, ArrowLeft, CheckCheck, Trash2, MoreVertical, Search, Pin, Star, BellOff, ChevronDown, Archive } from 'lucide-react';
+import { Video, Phone, ArrowLeft, CheckCheck, Trash2, MoreVertical, Search, Pin, Star, BellOff, ChevronDown, Archive, Lock, X, MessageSquare, Clock } from 'lucide-react';
+import { hashPassword, getLockedChatKeys, saveLockedChatsData, getChatKey, isChatLocked, getChatPasscodeHash, lockChatWithPasscode, unlockAndRemoveChatLock } from '../utils/chatLock';
+import StarredMessagesModal from './StarredMessagesModal';
 
 function Sidebar({ user, onLogout, conversations, groups, activeChat, onSelectChat, refreshChats, onRequestAppLock, onCreateGroup, activeTab, className = '' }) {
   const { getDisplayName } = useContacts();
@@ -11,6 +13,7 @@ function Sidebar({ user, onLogout, conversations, groups, activeChat, onSelectCh
   const [searchResults, setSearchResults] = useState([]);
   const [isSearching, setIsSearching] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
+  const [showStarredModal, setShowStarredModal] = useState(false);
   
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedChats, setSelectedChats] = useState([]);
@@ -18,6 +21,92 @@ function Sidebar({ user, onLogout, conversations, groups, activeChat, onSelectCh
   const [hoveredChatId, setHoveredChatId] = useState(null);
   const [dropdownPos, setDropdownPos] = useState(null); // { x, y, chat }
   const [showArchived, setShowArchived] = useState(false);
+  const [showLockedFolder, setShowLockedFolder] = useState(false);
+
+  // Chat Lock State
+  const [lockedChatKeys, setLockedChatKeys] = useState(getLockedChatKeys());
+  const [unlockedSessionKeys, setUnlockedSessionKeys] = useState(new Set());
+  const [passcodeModal, setPasscodeModal] = useState(null); // { mode, chat, chatKey }
+  const [passcodeInput, setPasscodeInput] = useState('');
+  const [passcodeError, setPasscodeError] = useState('');
+
+  useEffect(() => {
+    const handleToggleLockEvent = (e) => {
+      if (e.detail) {
+        toggleLockChat(e.detail);
+      }
+    };
+    window.addEventListener('chatbox_toggle_chat_lock', handleToggleLockEvent);
+    return () => window.removeEventListener('chatbox_toggle_chat_lock', handleToggleLockEvent);
+  }, [lockedChatKeys]);
+
+  // Auto re-lock inactive chats when switching away
+  useEffect(() => {
+    if (activeChat) {
+      const activeKey = getChatKey(activeChat);
+      setUnlockedSessionKeys(prev => {
+        if (prev.has(activeKey)) {
+          return new Set([activeKey]);
+        }
+        return new Set();
+      });
+    }
+  }, [activeChat?.id, activeChat?.isGroup]);
+
+  const toggleLockChat = (chat) => {
+    const key = getChatKey(chat);
+    const locked = isChatLocked(key);
+
+    setPasscodeInput('');
+    setPasscodeError('');
+
+    if (locked) {
+      setPasscodeModal({ mode: 'unlock_and_remove', chat, chatKey: key });
+    } else {
+      setPasscodeModal({ mode: 'set_custom_chat_lock', chat, chatKey: key });
+    }
+  };
+
+  const handlePasscodeSubmit = async (e) => {
+    e.preventDefault();
+    if (!passcodeInput.trim()) return;
+
+    const inputHash = await hashPassword(passcodeInput.trim());
+
+    if (passcodeModal.mode === 'set_custom_chat_lock') {
+      lockChatWithPasscode(passcodeModal.chatKey, inputHash);
+      setLockedChatKeys(getLockedChatKeys());
+      setUnlockedSessionKeys(prev => new Set(prev).add(passcodeModal.chatKey));
+      setPasscodeModal(null);
+      showAlert('Chat Locked 🔒', 'This chat is now locked with your custom passcode.');
+      return;
+    }
+
+    const savedHash = getChatPasscodeHash(passcodeModal.chatKey);
+
+    if (savedHash && savedHash !== inputHash) {
+      setPasscodeError('Incorrect passcode for this chat');
+      return;
+    }
+
+    if (passcodeModal.mode === 'unlock_and_remove') {
+      unlockAndRemoveChatLock(passcodeModal.chatKey);
+      setLockedChatKeys(getLockedChatKeys());
+      setPasscodeModal(null);
+      showAlert('Chat Unlocked 🔓', 'Lock protection removed for this chat.');
+    } else if (passcodeModal.mode === 'unlock_folder') {
+      const allLocked = new Set(unlockedSessionKeys);
+      lockedChatKeys.forEach(k => allLocked.add(k));
+      setUnlockedSessionKeys(allLocked);
+      setShowLockedFolder(true);
+      setPasscodeModal(null);
+    } else if (passcodeModal.mode === 'unlock') {
+      setUnlockedSessionKeys(prev => new Set(prev).add(passcodeModal.chatKey));
+      const targetChat = passcodeModal.chat;
+      setPasscodeModal(null);
+      if (targetChat) onSelectChat(targetChat);
+    }
+  };
 
   const renderFormattedContent = (content, size = 14) => {
     if (!content) return null;
@@ -209,6 +298,7 @@ function Sidebar({ user, onLogout, conversations, groups, activeChat, onSelectCh
                   }}>
                     {[
                       { label: 'New group', onClick: () => { setShowMenu(false); onCreateGroup(); } },
+                      { label: 'Starred messages', onClick: () => { setShowMenu(false); setShowStarredModal(true); } },
                       { label: 'Select chats', onClick: () => { setShowMenu(false); setSelectionMode(true); } },
                       { label: 'Mark all as read', onClick: handleMarkAllAsRead },
                       { label: 'App lock', onClick: onRequestAppLock },
@@ -257,12 +347,14 @@ function Sidebar({ user, onLogout, conversations, groups, activeChat, onSelectCh
             const name = isGroup ? chat.name : getDisplayName(otherParticipant);
             const unreadCount = chat.unread_count || 0;
             const isSelected = selectedChats.some(c => c.id === chat.id && c.isGroup === chat.isGroup);
+            const chatKey = getChatKey(chat);
+            const isLocked = isChatLocked(chatKey);
+            const isUnlockedSession = unlockedSessionKeys.has(chatKey);
             
             return (
               <div 
-                key={`${isGroup ? 'group' : 'conv'}-${chat.id}`} 
-                className={`conversation-item ${!selectionMode && activeChat?.id === chat.id && activeChat?.isGroup === isGroup ? 'active' : ''}`}
-                style={isSelected ? { backgroundColor: 'var(--bg-secondary)' } : {}}
+                key={`${isGroup ? 'g' : 'c'}_${chat.id}`} 
+                className={`conversation-item ${isSelected ? 'selected' : ''} ${activeChat?.id === chat.id && activeChat?.isGroup === isGroup ? 'active' : ''}`}
                 onMouseEnter={() => setHoveredChatId(chat.id)}
                 onMouseLeave={() => setHoveredChatId(null)}
                 onClick={() => {
@@ -272,6 +364,10 @@ function Sidebar({ user, onLogout, conversations, groups, activeChat, onSelectCh
                     } else {
                       setSelectedChats(prev => [...prev, chat]);
                     }
+                  } else if (isLocked && !isUnlockedSession) {
+                    setPasscodeInput('');
+                    setPasscodeError('');
+                    setPasscodeModal({ mode: 'unlock', chat, chatKey });
                   } else {
                     onSelectChat(chat);
                     if (unreadCount > 0) {
@@ -312,6 +408,7 @@ function Sidebar({ user, onLogout, conversations, groups, activeChat, onSelectCh
                   <div className="conversation-header">
                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                        <span className="conversation-name">{name}</span>
+                       {isLocked && <Lock size={14} color="#00a884" strokeWidth={2.5} title="Locked Chat" />}
                        {chat.is_pinned && <Pin size={14} fill="var(--text-secondary)" color="var(--text-secondary)" />}
                        {chat.is_favourite && <Star size={14} fill="var(--primary-color)" color="var(--primary-color)" />}
                        {chat.is_muted && <BellOff size={14} color="var(--text-secondary)" />}
@@ -322,7 +419,11 @@ function Sidebar({ user, onLogout, conversations, groups, activeChat, onSelectCh
                   </div>
                   <div className="conversation-last-msg" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '80%' }}>
-                      {chat.last_message ? (
+                      {isLocked && !isUnlockedSession ? (
+                        <span style={{ color: 'var(--text-secondary)', fontStyle: 'italic', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                          <Lock size={12} color="var(--text-secondary)" /> Locked chat
+                        </span>
+                      ) : chat.last_message ? (
                         <>
                            {chat.last_message.sender?.id === user?.id ? "You: " : (isGroup ? `${getDisplayName(chat.last_message.sender, true)}: ` : "")}
                            {renderFormattedContent(chat.last_message.content, 14)}
@@ -379,6 +480,19 @@ function Sidebar({ user, onLogout, conversations, groups, activeChat, onSelectCh
                 {filteredChats.map(renderChat)}
 
                 {searchResults.length > 0 && <div style={{ padding: '10px 20px', color: 'var(--primary-color)', fontSize: '14px', fontWeight: 'bold' }}>CONTACTS</div>}
+                <div className="conversation-item" onClick={() => startConversation(user?.id)} style={{ borderBottom: '1px solid var(--border-color)' }}>
+                  <div className="user-avatar" style={{ backgroundColor: '#00a884', color: 'white' }}>
+                    {user?.username ? user.username.charAt(0).toUpperCase() : 'Y'}
+                  </div>
+                  <div className="conversation-details">
+                    <div className="conversation-header">
+                      <span className="conversation-name" style={{ fontWeight: 'bold' }}>{user?.username} (You)</span>
+                    </div>
+                    <div className="conversation-last-msg">
+                      <span style={{ color: '#00a884', fontWeight: '500' }}>Message yourself • Saved notes & media</span>
+                    </div>
+                  </div>
+                </div>
                 {searchResults.map(u => {
                   const uDisplayName = getDisplayName(u);
                   const initial = uDisplayName ? uDisplayName.charAt(0).toUpperCase() : u.phone_number?.charAt(0) || '?';
@@ -400,6 +514,31 @@ function Sidebar({ user, onLogout, conversations, groups, activeChat, onSelectCh
             );
           } else {
             const archivedCount = [...conversations, ...groups].filter(c => c.is_archived).length;
+            const lockedCount = lockedChatKeys.length;
+
+            if (showLockedFolder) {
+              const lockedChatsList = allChats.filter(c => lockedChatKeys.includes(getChatKey(c)));
+              return (
+                <>
+                  <div className="conversation-item" style={{ padding: '15px 20px', cursor: 'pointer', backgroundColor: 'var(--bg-secondary)', borderBottom: '1px solid var(--border-color)' }} onClick={() => setShowLockedFolder(false)}>
+                    <div style={{ width: '44px', display: 'flex', justifyContent: 'center', color: '#00a884' }}>
+                      <ArrowLeft size={20} strokeWidth={2.2} />
+                    </div>
+                    <div className="conversation-details" style={{ justifyContent: 'center' }}>
+                      <span className="conversation-name" style={{ color: '#00a884', fontWeight: 'bold' }}>Locked Chats</span>
+                    </div>
+                  </div>
+                  {lockedChatsList.length === 0 ? (
+                    <div style={{ padding: '30px 20px', textAlign: 'center', color: 'var(--text-secondary)', fontSize: '14px' }}>
+                      No locked chats right now.
+                    </div>
+                  ) : (
+                    lockedChatsList.map(renderChat)
+                  )}
+                </>
+              );
+            }
+
             return (
               <>
                 {showArchived ? (
@@ -412,19 +551,42 @@ function Sidebar({ user, onLogout, conversations, groups, activeChat, onSelectCh
                     </div>
                   </div>
                 ) : (
-                  archivedCount > 0 && (
-                    <div className="conversation-item" style={{ padding: '15px 20px', cursor: 'pointer' }} onClick={() => setShowArchived(true)}>
-                      <div style={{ width: '44px', display: 'flex', justifyContent: 'center', color: 'var(--text-secondary)' }}>
-                        <Archive size={20} strokeWidth={2.2} />
-                      </div>
-                      <div className="conversation-details" style={{ justifyContent: 'center' }}>
-                        <div className="conversation-header">
-                          <span className="conversation-name">Archived</span>
-                          <span className="conversation-time" style={{ color: 'var(--primary-color)' }}>{archivedCount}</span>
+                  <>
+                    {lockedCount > 0 && (
+                      <div 
+                        className="conversation-item" 
+                        style={{ padding: '15px 20px', cursor: 'pointer', borderBottom: '1px solid var(--border-color)' }} 
+                        onClick={() => {
+                          setPasscodeInput('');
+                          setPasscodeError('');
+                          setPasscodeModal({ mode: 'unlock_folder' });
+                        }}
+                      >
+                        <div style={{ width: '44px', display: 'flex', justifyContent: 'center', color: '#00a884' }}>
+                          <Lock size={20} strokeWidth={2.2} />
+                        </div>
+                        <div className="conversation-details" style={{ justifyContent: 'center' }}>
+                          <div className="conversation-header">
+                            <span className="conversation-name" style={{ color: 'var(--text-primary)', fontWeight: '600' }}>Locked chats</span>
+                            <span className="conversation-time" style={{ color: '#00a884', fontWeight: 'bold' }}>{lockedCount}</span>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  )
+                    )}
+                    {archivedCount > 0 && (
+                      <div className="conversation-item" style={{ padding: '15px 20px', cursor: 'pointer' }} onClick={() => setShowArchived(true)}>
+                        <div style={{ width: '44px', display: 'flex', justifyContent: 'center', color: 'var(--text-secondary)' }}>
+                          <Archive size={20} strokeWidth={2.2} />
+                        </div>
+                        <div className="conversation-details" style={{ justifyContent: 'center' }}>
+                          <div className="conversation-header">
+                            <span className="conversation-name">Archived</span>
+                            <span className="conversation-time" style={{ color: 'var(--primary-color)' }}>{archivedCount}</span>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </>
                 )}
                 {allChats.map(renderChat)}
               </>
@@ -446,6 +608,7 @@ function Sidebar({ user, onLogout, conversations, groups, activeChat, onSelectCh
             boxShadow: '0 2px 10px rgba(0,0,0,0.3)', padding: '10px 0', minWidth: '180px', zIndex: 10000
           }}>
             {[
+              { label: isChatLocked(getChatKey(dropdownPos.chat)) ? 'Unlock chat 🔓' : 'Lock chat 🔒', onClick: () => toggleLockChat(dropdownPos.chat) },
               { label: dropdownPos.chat.is_pinned ? 'Unpin chat' : 'Pin chat', onClick: () => {
                  const endpoint = dropdownPos.chat.isGroup ? `chat/groups/${dropdownPos.chat.id}/toggle_pin/` : `chat/conversations/${dropdownPos.chat.id}/toggle_pin/`;
                  api.post(endpoint).then(() => refreshChats());
@@ -477,6 +640,79 @@ function Sidebar({ user, onLogout, conversations, groups, activeChat, onSelectCh
           </div>
         </>
       )}
+
+      {passcodeModal && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+          backgroundColor: 'rgba(0,0,0,0.75)', zIndex: 11000,
+          display: 'flex', alignItems: 'center', justifyContent: 'center'
+        }}>
+          <div style={{
+            backgroundColor: 'var(--bg-primary)', padding: '25px', borderRadius: '16px',
+            width: '360px', maxWidth: '90%', border: '1px solid var(--border-color)',
+            boxShadow: '0 10px 30px rgba(0,0,0,0.5)', textAlign: 'center'
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
+              <h3 style={{ margin: 0, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '18px' }}>
+                <Lock size={20} color="#00a884" />
+                {passcodeModal.mode === 'set_custom_chat_lock' && 'Set Passcode for Chat'}
+                {passcodeModal.mode === 'unlock_and_remove' && 'Unlock & Un-lock Chat'}
+                {passcodeModal.mode === 'unlock' && 'Locked Chat'}
+                {passcodeModal.mode === 'unlock_folder' && 'Unlock Locked Chats'}
+              </h3>
+              <button onClick={() => setPasscodeModal(null)} style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer' }}>
+                <X size={20} />
+              </button>
+            </div>
+
+            <p style={{ color: 'var(--text-secondary)', fontSize: '14px', marginBottom: '20px' }}>
+              {passcodeModal.mode === 'set_custom_chat_lock' && 'Enter a custom passcode/PIN to lock this specific chat.'}
+              {passcodeModal.mode === 'unlock_and_remove' && 'Enter passcode for this chat to remove lock protection.'}
+              {passcodeModal.mode === 'unlock' && 'Enter passcode for this chat to view conversation.'}
+              {passcodeModal.mode === 'unlock_folder' && 'Enter passcode to view locked chats.'}
+            </p>
+
+            <form onSubmit={handlePasscodeSubmit}>
+              <input
+                type="password"
+                placeholder="Enter passcode"
+                value={passcodeInput}
+                onChange={e => setPasscodeInput(e.target.value)}
+                autoFocus
+                style={{
+                  width: '100%', padding: '12px', borderRadius: '8px',
+                  border: passcodeError ? '1px solid #ef4444' : '1px solid var(--border-color)',
+                  backgroundColor: 'var(--bg-secondary)', color: 'var(--text-primary)',
+                  textAlign: 'center', fontSize: '16px', marginBottom: '10px', outline: 'none', boxSizing: 'border-box'
+                }}
+              />
+              {passcodeError && <p style={{ color: '#ef4444', fontSize: '13px', margin: '0 0 12px 0' }}>{passcodeError}</p>}
+
+              <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end', marginTop: '15px' }}>
+                <button
+                  type="button"
+                  onClick={() => setPasscodeModal(null)}
+                  style={{ padding: '8px 16px', borderRadius: '20px', border: '1px solid var(--border-color)', backgroundColor: 'transparent', color: 'var(--text-secondary)', cursor: 'pointer' }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={!passcodeInput.trim()}
+                  style={{ padding: '8px 20px', borderRadius: '20px', border: 'none', backgroundColor: '#00a884', color: 'white', fontWeight: 'bold', cursor: 'pointer' }}
+                >
+                  Confirm
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      <StarredMessagesModal
+        isOpen={showStarredModal}
+        onClose={() => setShowStarredModal(false)}
+      />
     </div>
   );
 }

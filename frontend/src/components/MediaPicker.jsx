@@ -1,77 +1,88 @@
 import React, { useState, useEffect } from 'react';
 import EmojiPicker from 'emoji-picker-react';
 
-// Dedicated, unique GIF category packs using unblockable WebP format!
+// Reliable fallback GIF animations using stable CDN URLs
 const GIF_PACKS = {
+  trending: [
+    { id: 't1', title: 'Laughing Hysterically', url: 'https://fonts.gstatic.com/s/e/notoemoji/latest/1f602/512.gif' },
+    { id: 't2', title: 'Mind Blown', url: 'https://fonts.gstatic.com/s/e/notoemoji/latest/1f92f/512.gif' },
+    { id: 't3', title: 'Sparkling Heart', url: 'https://fonts.gstatic.com/s/e/notoemoji/latest/1f496/512.gif' },
+    { id: 't4', title: 'Fire Flame', url: 'https://fonts.gstatic.com/s/e/notoemoji/latest/1f525/512.gif' },
+    { id: 't5', title: 'Party Confetti', url: 'https://fonts.gstatic.com/s/e/notoemoji/latest/1f973/512.gif' },
+    { id: 't6', title: 'Cool Sunglasses', url: 'https://fonts.gstatic.com/s/e/notoemoji/latest/1f60e/512.gif' },
+    { id: 't7', title: 'Star Eyes', url: 'https://fonts.gstatic.com/s/e/notoemoji/latest/1f929/512.gif' },
+    { id: 't8', title: 'Clapping Hands', url: 'https://fonts.gstatic.com/s/e/notoemoji/latest/1f44f/512.gif' }
+  ],
   funny: [
-    { id: 'f1', title: 'Laughing Hysterically', url: 'https://media0.giphy.com/media/10JhviFuU2gWD6/giphy.webp' },
-    { id: 'f2', title: 'Minions Giggling', url: 'https://media1.giphy.com/media/Z5zuypybI5dYI/giphy.webp' },
-    { id: 'f3', title: 'Cat Laughing', url: 'https://media2.giphy.com/media/Q81NcsY6YxK7jxnr4v/giphy.webp' },
-    { id: 'f4', title: 'Chuckling Meme', url: 'https://media3.giphy.com/media/9T1k5pwZ3wRcA/giphy.webp' },
-    { id: 'f5', title: 'Rolling On Floor Laughing', url: 'https://media0.giphy.com/media/lszAB3TzFtRaU/giphy.webp' },
-    { id: 'f6', title: 'Suppressing A Laugh', url: 'https://media1.giphy.com/media/CoDp6NnSmItoY/giphy.webp' },
-    { id: 'f7', title: 'Animated Cartoon Laugh', url: 'https://media2.giphy.com/media/wWUE0LFNI3S6I/giphy.webp' },
-    { id: 'f8', title: 'Funny Dog Smirk', url: 'https://media3.giphy.com/media/BdfyC6lBBYAxy/giphy.webp' }
+    { id: 'f1', title: 'Laughing Hysterically', url: 'https://fonts.gstatic.com/s/e/notoemoji/latest/1f602/512.gif' },
+    { id: 'f2', title: 'Rolling On Floor Laughing', url: 'https://fonts.gstatic.com/s/e/notoemoji/latest/1f923/512.gif' },
+    { id: 'f3', title: 'Cat Laughing', url: 'https://fonts.gstatic.com/s/e/notoemoji/latest/1f431/512.gif' },
+    { id: 'f4', title: 'Winking Friendly Eye', url: 'https://fonts.gstatic.com/s/e/notoemoji/latest/1f609/512.gif' },
+    { id: 'f5', title: 'Cool Shades Boss', url: 'https://fonts.gstatic.com/s/e/notoemoji/latest/1f60e/512.gif' },
+    { id: 'f6', title: 'Zany Face', url: 'https://fonts.gstatic.com/s/e/notoemoji/latest/1f92a/512.gif' },
+    { id: 'f7', title: 'Monkey See No Evil', url: 'https://fonts.gstatic.com/s/e/notoemoji/latest/1f648/512.gif' },
+    { id: 'f8', title: 'Dog Happy Face', url: 'https://fonts.gstatic.com/s/e/notoemoji/latest/1f436/512.gif' }
   ],
   sad: [
-    { id: 's1', title: 'Sad Crying TV Scene', url: 'https://media0.giphy.com/media/ROF8OQvDmxytW/giphy.webp' },
-    { id: 's2', title: 'Sad Pikachu Crying', url: 'https://media1.giphy.com/media/L95W4wv8nnb9K/giphy.webp' },
-    { id: 's3', title: 'Lonely Crying Cat', url: 'https://media2.giphy.com/media/qQdL532ZANbjy/giphy.webp' },
-    { id: 's4', title: 'Tearful Eyes Puppy', url: 'https://media3.giphy.com/media/26FmRmcfF4s3u2mQ/giphy.webp' },
-    { id: 's5', title: 'Heartbroken Comfort Hug', url: 'https://media0.giphy.com/media/3o6wrvdLFbw4Z5AAs8/giphy.webp' },
-    { id: 's6', title: 'Rainy Crying Window', url: 'https://media1.giphy.com/media/d2lcHJTG5TwyB5qn/giphy.webp' },
-    { id: 's7', title: 'Sad Bear Solitary', url: 'https://media2.giphy.com/media/OPU6wzx8JrHna/giphy.webp' },
-    { id: 's8', title: 'Emotional Tear Wiping', url: 'https://media3.giphy.com/media/xT9DPuMFeilLak0VAA/giphy.webp' }
+    { id: 's1', title: 'Loudly Crying Face', url: 'https://fonts.gstatic.com/s/e/notoemoji/latest/1f62d/512.gif' },
+    { id: 's2', title: 'Crying Tear Eye', url: 'https://fonts.gstatic.com/s/e/notoemoji/latest/1f622/512.gif' },
+    { id: 's3', title: 'Pleading Face', url: 'https://fonts.gstatic.com/s/e/notoemoji/latest/1f97a/512.gif' },
+    { id: 's4', title: 'Sad But Relieved', url: 'https://fonts.gstatic.com/s/e/notoemoji/latest/1f625/512.gif' },
+    { id: 's5', title: 'Broken Heart', url: 'https://fonts.gstatic.com/s/e/notoemoji/latest/1f494/512.gif' },
+    { id: 's6', title: 'Sad Disappointed Face', url: 'https://fonts.gstatic.com/s/e/notoemoji/latest/1f61e/512.gif' },
+    { id: 's7', title: 'Downcast Eyes', url: 'https://fonts.gstatic.com/s/e/notoemoji/latest/1f614/512.gif' },
+    { id: 's8', title: 'Weary Sigh', url: 'https://fonts.gstatic.com/s/e/notoemoji/latest/1f629/512.gif' }
   ],
   love: [
-    { id: 'l1', title: 'Blowing Hearts Kiss', url: 'https://media0.giphy.com/media/26BRv0ThflsHCqDrG/giphy.webp' },
-    { id: 'l2', title: 'Cute Bear Hug', url: 'https://media1.giphy.com/media/MDJ9IbxxvDUQM/giphy.webp' },
-    { id: 'l3', title: 'Floating Pink Hearts', url: 'https://media2.giphy.com/media/LqxeCjCg3271Z8Iq0z/giphy.webp' },
-    { id: 'l4', title: 'Love You Mucho', url: 'https://media3.giphy.com/media/26FLdmIp6wJr91JAI/giphy.webp' },
-    { id: 'l5', title: 'Romantic Cartoon Hug', url: 'https://media0.giphy.com/media/ev6539aPewaEE/giphy.webp' },
-    { id: 'l6', title: 'Heart Thumping Fast', url: 'https://media1.giphy.com/media/3o7TKoWXm3okO1kgHC/giphy.webp' },
-    { id: 'l7', title: 'Puppy Love Eyes', url: 'https://media2.giphy.com/media/M33UV4NDvkTHa/giphy.webp' },
-    { id: 'l8', title: 'Sweetheart Kisses', url: 'https://media3.giphy.com/media/G1iE6f5bdfyN2/giphy.webp' }
+    { id: 'l1', title: 'Sparkling Hearts', url: 'https://fonts.gstatic.com/s/e/notoemoji/latest/1f496/512.gif' },
+    { id: 'l2', title: 'Blowing Kiss', url: 'https://fonts.gstatic.com/s/e/notoemoji/latest/1f618/512.gif' },
+    { id: 'l3', title: 'Heart Eyes Love', url: 'https://fonts.gstatic.com/s/e/notoemoji/latest/1f60d/512.gif' },
+    { id: 'l4', title: 'Two Dancing Hearts', url: 'https://fonts.gstatic.com/s/e/notoemoji/latest/1f495/512.gif' },
+    { id: 'l5', title: 'Beating Heart', url: 'https://fonts.gstatic.com/s/e/notoemoji/latest/1f493/512.gif' },
+    { id: 'l6', title: 'Red Heart', url: 'https://fonts.gstatic.com/s/e/notoemoji/latest/2764_fe0f/512.gif' },
+    { id: 'l7', title: 'Cupid Arrow Heart', url: 'https://fonts.gstatic.com/s/e/notoemoji/latest/1f498/512.gif' },
+    { id: 'l8', title: 'Teddy Bear Love', url: 'https://fonts.gstatic.com/s/e/notoemoji/latest/1f43b/512.gif' }
   ],
   dance: [
-    { id: 'd1', title: 'Excited Party Dance', url: 'https://media0.giphy.com/media/l0MYt5jPR6QX5pnqM/giphy.webp' },
-    { id: 'd2', title: 'Snoopy Celebration Dance', url: 'https://media1.giphy.com/media/blSTtZehjAZ8I/giphy.webp' },
-    { id: 'd3', title: 'Disco Dancing Groove', url: 'https://media2.giphy.com/media/BZY2KYgoYOLKa2D5n3/giphy.webp' },
-    { id: 'd4', title: 'Minion Party Dance', url: 'https://media3.giphy.com/media/13HgwMw4MWNTb2/giphy.webp' },
-    { id: 'd5', title: 'Penguin Dancing Happy', url: 'https://media0.giphy.com/media/Y4pAQv58ETJgRwoPrI/giphy.webp' },
-    { id: 'd6', title: 'Groovy Dance Floor', url: 'https://media1.giphy.com/media/11sBLVxNs7v6WA/giphy.webp' },
-    { id: 'd7', title: 'Joyful Jumping Cheer', url: 'https://media2.giphy.com/media/EK0DwtW9k7cVG/giphy.webp' },
-    { id: 'd8', title: 'Celebrating Victory', url: 'https://media3.giphy.com/media/nuknC875TxyoM/giphy.webp' }
+    { id: 'd1', title: 'Party Confetti Face', url: 'https://fonts.gstatic.com/s/e/notoemoji/latest/1f973/512.gif' },
+    { id: 'd2', title: 'Party Popper Horn', url: 'https://fonts.gstatic.com/s/e/notoemoji/latest/1f389/512.gif' },
+    { id: 'd3', title: 'Confetti Ball Streamers', url: 'https://fonts.gstatic.com/s/e/notoemoji/latest/1f38a/512.gif' },
+    { id: 'd4', title: 'Musical Notes Dancing', url: 'https://fonts.gstatic.com/s/e/notoemoji/latest/1f3b6/512.gif' },
+    { id: 'd5', title: 'Sparkle Stars', url: 'https://fonts.gstatic.com/s/e/notoemoji/latest/2728/512.gif' },
+    { id: 'd6', title: 'Rocket Flight Sky', url: 'https://fonts.gstatic.com/s/e/notoemoji/latest/1f680/512.gif' },
+    { id: 'd7', title: 'Dancing Penguin', url: 'https://fonts.gstatic.com/s/e/notoemoji/latest/1f427/512.gif' },
+    { id: 'd8', title: 'Winner Gold Trophy', url: 'https://fonts.gstatic.com/s/e/notoemoji/latest/1f3c6/512.gif' }
   ],
   clapping: [
-    { id: 'c1', title: 'Standing Ovation Applause', url: 'https://media0.giphy.com/media/3o7qDEq2bMbcbPRQ2c/giphy.webp' },
-    { id: 'c2', title: 'Leonardo DiCaprio Toast', url: 'https://media1.giphy.com/media/t2sKa4JKNW9DawxAYi/giphy.webp' },
-    { id: 'c3', title: 'Slow Clap Approving', url: 'https://media2.giphy.com/media/2x0tJPI3P8rIfGA9k3/giphy.webp' },
-    { id: 'c4', title: 'Minion Clapping Happy', url: 'https://media3.giphy.com/media/111ebonMs90YLu/giphy.webp' },
-    { id: 'c5', title: 'Elegant Wine Toast', url: 'https://media0.giphy.com/media/GCLlQnV4ndg7C/giphy.webp' },
-    { id: 'c6', title: 'Enthusiastic Thumbs Up', url: 'https://media1.giphy.com/media/XrmjSStqO7QGk/giphy.webp' },
-    { id: 'c7', title: 'Cheering Crowd Victory', url: 'https://media2.giphy.com/media/xT5LMHxhOfscxPfIfu/giphy.webp' },
-    { id: 'c8', title: 'Perfect Score 10/10', url: 'https://media3.giphy.com/media/dVdIu1HNxeKyqzkgPA/giphy.webp' }
+    { id: 'c1', title: 'Clapping Applause', url: 'https://fonts.gstatic.com/s/e/notoemoji/latest/1f44f/512.gif' },
+    { id: 'c2', title: 'Thumbs Up Approval', url: 'https://fonts.gstatic.com/s/e/notoemoji/latest/1f44d/512.gif' },
+    { id: 'c3', title: 'Champagne Glasses Toast', url: 'https://fonts.gstatic.com/s/e/notoemoji/latest/1f942/512.gif' },
+    { id: 'c4', title: 'Party Celebration', url: 'https://fonts.gstatic.com/s/e/notoemoji/latest/1f389/512.gif' },
+    { id: 'c5', title: 'Gold Crown Royalty', url: 'https://fonts.gstatic.com/s/e/notoemoji/latest/1f451/512.gif' },
+    { id: 'c6', title: 'Fire Flame Hot', url: 'https://fonts.gstatic.com/s/e/notoemoji/latest/1f525/512.gif' },
+    { id: 'c7', title: 'Beer Mugs Toast', url: 'https://fonts.gstatic.com/s/e/notoemoji/latest/1f37b/512.gif' },
+    { id: 'c8', title: 'Hundred Score 100', url: 'https://fonts.gstatic.com/s/e/notoemoji/latest/1f4af/512.gif' }
   ],
   wow: [
-    { id: 'w1', title: 'Mind Blown Universe', url: 'https://media0.giphy.com/media/26ufdipQqB2lhNA4g/giphy.webp' },
-    { id: 'w2', title: 'Surprised Gasps', url: 'https://media1.giphy.com/media/VgfO1F3gGvS1G/giphy.webp' },
-    { id: 'w3', title: 'Jaw Drop Wow', url: 'https://media2.giphy.com/media/xT0xeJpnrWC4XWblEk/giphy.webp' },
-    { id: 'w4', title: 'Wide Eyed Shock', url: 'https://media3.giphy.com/media/l41YkxvU8c7J7Bmw/giphy.webp' },
-    { id: 'w5', title: 'Cat Shocked Face', url: 'https://media0.giphy.com/media/13HvcH85f7V5U4/giphy.webp' },
-    { id: 'w6', title: 'OMG Excitement Scream', url: 'https://media1.giphy.com/media/5wWf7H89PisM6An8UAU/giphy.webp' },
-    { id: 'w7', title: 'Dramatic Soap Opera Gasps', url: 'https://media2.giphy.com/media/k5m2GqX5q4sF2/giphy.webp' },
-    { id: 'w8', title: 'Unbelievable Amazement', url: 'https://media3.giphy.com/media/l0IylOPCNkiqOgMyA/giphy.webp' }
+    { id: 'w1', title: 'Mind Blown Shock', url: 'https://fonts.gstatic.com/s/e/notoemoji/latest/1f92f/512.gif' },
+    { id: 'w2', title: 'Astonished Face', url: 'https://fonts.gstatic.com/s/e/notoemoji/latest/1f632/512.gif' },
+    { id: 'w3', title: 'Flushed Face', url: 'https://fonts.gstatic.com/s/e/notoemoji/latest/1f633/512.gif' },
+    { id: 'w4', title: 'Screaming In Fear', url: 'https://fonts.gstatic.com/s/e/notoemoji/latest/1f631/512.gif' },
+    { id: 'w5', title: 'Cat Shocked Face', url: 'https://fonts.gstatic.com/s/e/notoemoji/latest/1f640/512.gif' },
+    { id: 'w6', title: 'Star Eyes Wow', url: 'https://fonts.gstatic.com/s/e/notoemoji/latest/1f929/512.gif' },
+    { id: 'w7', title: 'Wide Eyed Surprise', url: 'https://fonts.gstatic.com/s/e/notoemoji/latest/1f62e/512.gif' },
+    { id: 'w8', title: 'Face With Monocle', url: 'https://fonts.gstatic.com/s/e/notoemoji/latest/1f9d0/512.gif' }
   ]
 };
 
 const GIF_CATEGORIES = [
-  { id: 'funny', label: '😂 Funny', query: 'funny laughing meme' },
-  { id: 'sad', label: '😭 Sad', query: 'sad crying tears' },
-  { id: 'love', label: '❤️ Love', query: 'romantic hugs kiss' },
-  { id: 'dance', label: '💃 Dance', query: 'party dance celebration' },
-  { id: 'clapping', label: '👏 Cheers', query: 'clapping applause toast' },
-  { id: 'wow', label: '😱 Wow', query: 'shocked mind blown wow' }
+  { id: 'trending', label: '🔥 Trending', query: '' },
+  { id: 'funny', label: '😂 Funny', query: 'funny laughing' },
+  { id: 'sad', label: '😭 Sad', query: 'sad crying' },
+  { id: 'love', label: '❤️ Love', query: 'romantic love' },
+  { id: 'dance', label: '💃 Dance', query: 'party dance' },
+  { id: 'clapping', label: '👏 Cheers', query: 'cheers applause' },
+  { id: 'wow', label: '😱 Wow', query: 'shocked wow' }
 ];
 
 // 100% reliable, permanent Google Noto Animated Stickers! (Never expire or show "content not available")
@@ -144,7 +155,7 @@ export default function MediaPicker({ onSelectEmoji, onSelectGif, onSelectSticke
   // GIFs state (with categories & distinct packs)
   const [gifQuery, setGifQuery] = useState('');
   const [activeGifCategory, setActiveGifCategory] = useState(GIF_CATEGORIES[0]);
-  const [gifs, setGifs] = useState(GIF_PACKS[GIF_CATEGORIES[0].id]);
+  const [gifs, setGifs] = useState(GIF_PACKS[GIF_CATEGORIES[0].id] || GIF_PACKS['trending']);
   const [loadingGifs, setLoadingGifs] = useState(false);
 
   // Stickers state
@@ -153,105 +164,46 @@ export default function MediaPicker({ onSelectEmoji, onSelectGif, onSelectSticke
   const [stickers, setStickers] = useState(STICKER_PACKS[STICKER_CATEGORIES[0].id]);
   const [loadingStickers, setLoadingStickers] = useState(false);
 
-  // Handle GIF queries with instant category pack switching & WebP prioritization
+  // Handle GIF queries instantly with local, unbreakable animation packs
   useEffect(() => {
     if (activeTab === 'gif') {
-      const fetchGifs = async () => {
-        setLoadingGifs(true);
-        
-        // Pick the matching GIF pack based on category chip or search keyword!
-        let targetPack = GIF_PACKS[activeGifCategory.id] || GIF_PACKS['funny'];
-        const queryLower = gifQuery.trim().toLowerCase();
-        if (queryLower === 'sad' || queryLower.includes('cry')) targetPack = GIF_PACKS['sad'];
-        else if (queryLower === 'love' || queryLower.includes('heart')) targetPack = GIF_PACKS['love'];
-        else if (queryLower === 'dance' || queryLower.includes('party')) targetPack = GIF_PACKS['dance'];
-        else if (queryLower === 'clapping' || queryLower.includes('cheer')) targetPack = GIF_PACKS['clapping'];
-        else if (queryLower === 'wow' || queryLower.includes('shock')) targetPack = GIF_PACKS['wow'];
-        else if (queryLower === 'funny' || queryLower.includes('laugh')) targetPack = GIF_PACKS['funny'];
-
-        if (!gifQuery.trim()) {
-          setGifs(targetPack);
-          setLoadingGifs(false);
-          return;
-        }
-
-        try {
-          const url = `https://api.giphy.com/v1/gifs/search?api_key=${GIPHY_KEY}&q=${encodeURIComponent(gifQuery)}&limit=24&rating=g`;
-          const res = await fetch(url);
-          if (res.ok) {
-            const data = await res.json();
-            if (data.data && data.data.length > 0) {
-              const parsed = data.data.map(item => ({
-                id: item.id,
-                title: item.title,
-                url: item.images?.fixed_height?.webp || item.images?.original?.webp || item.images?.fixed_height?.url
-              }));
-              setGifs(parsed);
-              setLoadingGifs(false);
-              return;
-            }
-          }
-        } catch (err) {
-          console.warn('Giphy GIF fetch fallback', err);
-        }
+      const targetPack = GIF_PACKS[activeGifCategory.id] || GIF_PACKS['trending'] || GIF_PACKS['funny'];
+      
+      if (!gifQuery.trim()) {
         setGifs(targetPack);
-        setLoadingGifs(false);
-      };
-      const timer = setTimeout(fetchGifs, 200);
-      return () => clearTimeout(timer);
+        return;
+      }
+
+      const query = gifQuery.trim().toLowerCase();
+      const allGifs = Object.values(GIF_PACKS).flat();
+      const matches = allGifs.filter(g => g.title.toLowerCase().includes(query));
+      setGifs(matches.length > 0 ? matches : targetPack);
     }
   }, [activeTab, gifQuery, activeGifCategory]);
 
-  // Handle Sticker Pack selection and keyword searches
+  // Handle Sticker queries instantly with local, unbreakable sticker packs
   useEffect(() => {
     if (activeTab === 'sticker') {
-      const fetchStickers = async () => {
-        setLoadingStickers(true);
-        
-        const targetPack = STICKER_PACKS[activeStickerCategory.id] || STICKER_PACKS['pets'];
-        
-        if (!stickerQuery.trim()) {
-          setStickers(targetPack);
-          setLoadingStickers(false);
-          return;
-        }
-
-        try {
-          const query = `${stickerQuery.trim()} cartoon sticker`;
-          const url = `https://api.giphy.com/v1/stickers/search?api_key=${GIPHY_KEY}&q=${encodeURIComponent(query)}&limit=24&rating=g`;
-          const res = await fetch(url);
-          if (res.ok) {
-            const data = await res.json();
-            if (data.data && data.data.length > 0) {
-              const parsed = data.data.map(item => ({
-                id: item.id,
-                title: item.title,
-                url: item.images?.fixed_height?.webp || item.images?.original?.webp || item.images?.fixed_height?.url
-              }));
-              setStickers(parsed);
-              setLoadingStickers(false);
-              return;
-            }
-          }
-        } catch (err) {
-          console.warn('Giphy Stickers fetch fallback', err);
-        }
+      const targetPack = STICKER_PACKS[activeStickerCategory.id] || STICKER_PACKS['pets'];
+      
+      if (!stickerQuery.trim()) {
         setStickers(targetPack);
-        setLoadingStickers(false);
-      };
-      const timer = setTimeout(fetchStickers, 150);
-      return () => clearTimeout(timer);
+        return;
+      }
+
+      const query = stickerQuery.trim().toLowerCase();
+      const allStickers = Object.values(STICKER_PACKS).flat();
+      const matches = allStickers.filter(s => s.title.toLowerCase().includes(query));
+      setStickers(matches.length > 0 ? matches : targetPack);
     }
   }, [activeTab, stickerQuery, activeStickerCategory]);
 
   return (
     <div style={{
-      width: '360px',
-      height: '430px',
+      width: '100%',
+      height: '100%',
       backgroundColor: 'var(--bg-secondary)',
-      border: '1px solid var(--border-color)',
-      borderRadius: '12px',
-      boxShadow: '0 4px 25px rgba(0,0,0,0.35)',
+      borderTop: '1px solid var(--border-color)',
       display: 'flex',
       flexDirection: 'column',
       overflow: 'hidden',
@@ -264,7 +216,7 @@ export default function MediaPicker({ onSelectEmoji, onSelectGif, onSelectSticke
             <EmojiPicker 
               onEmojiClick={onSelectEmoji}
               width="100%"
-              height="380px"
+              height="100%"
               searchDisabled={false}
               skinTonesDisabled={false}
             />
@@ -297,7 +249,10 @@ export default function MediaPicker({ onSelectEmoji, onSelectGif, onSelectSticke
             </div>
 
             {/* Quick-Switch Category Chips for GIFs */}
-            <div style={{ display: 'flex', gap: '6px', overflowX: 'auto', paddingBottom: '4px', scrollbarWidth: 'none' }}>
+            <div 
+              onWheel={(e) => { if (e.deltaY !== 0) e.currentTarget.scrollLeft += e.deltaY; }}
+              style={{ display: 'flex', gap: '6px', overflowX: 'auto', paddingBottom: '4px', scrollbarWidth: 'none' }}
+            >
               {GIF_CATEGORIES.map(cat => (
                 <button
                   key={cat.id}
@@ -390,7 +345,10 @@ export default function MediaPicker({ onSelectEmoji, onSelectGif, onSelectSticke
             </div>
 
             {/* Cartoon Sticker Packs / Category Switches */}
-            <div style={{ display: 'flex', gap: '6px', overflowX: 'auto', paddingBottom: '4px', scrollbarWidth: 'none' }}>
+            <div 
+              onWheel={(e) => { if (e.deltaY !== 0) e.currentTarget.scrollLeft += e.deltaY; }}
+              style={{ display: 'flex', gap: '6px', overflowX: 'auto', paddingBottom: '4px', scrollbarWidth: 'none' }}
+            >
               {STICKER_CATEGORIES.map(cat => (
                 <button
                   key={cat.id}
@@ -542,3 +500,5 @@ export default function MediaPicker({ onSelectEmoji, onSelectGif, onSelectSticke
     </div>
   );
 }
+
+export { MediaPicker };
