@@ -61,3 +61,11 @@ Status & Receipts,Status Quote Story Preview,Clicking status reply quote boxes i
 UI & UX,Web Audio API Notification & Ringtone System,Zero-dependency browser-synthesized audio tones for incoming message chimes, sent message pop sounds, and WebRTC incoming call ringtone loops,,,
 UI & UX,Customizable Notification & Ringtone Settings,Configure and test message sounds and incoming call ringtones (Classic, Marimba, Pop, Pulse, Digital, Gentle) inside Profile Settings,,,
 UI & UX,Browser Autoplay Policy Audio Unlock & Global Sound Engine,Automatic pointer/touch/keypress interaction listeners to unlock Web Audio API and play incoming message chimes globally across all active and background chats,,,
+Messaging,Inline Document Preview Modal,Preview PDFs, Word (.docx/.doc), Excel (.xlsx/.xls), and text documents directly inside a full-screen interactive viewport before and after sending without downloading.
+Messaging,HD Image Quality Toggle,Choose between Standard Quality (optimized) and HD Quality ✨ (full resolution) via an interactive pill toggle in the Image Preview Editor before sending photos in chat.
+Messaging,Automatic Scheduled Messages Engine,Schedule messages for future dates and times with a background Python daemon worker checking every 10 seconds to automatically dispatch due messages live over WebSockets.
+Messaging,Sequential Multi-Edit Audit History,Permanent Django Admin audit logging tracking initial message content at creation and recording every edit step with timestamped edit counts.
+Privacy,Disappearing Messages Timers,Set per-chat expiring message timers (24 Hours, 7 Days, 30 Days, Off) to auto-expire messages in participant chat windows while preserving compliance audit records in Django Admin.
+UI & UX,Mobile Media Picker Bottom Drawer,Responsive dual-mode Media Picker that opens as a floating popup menu on desktop and as a WhatsApp-style bottom drawer on mobile view below the text input field.
+UI & UX,Enhanced Django Admin Group Dashboard,Comprehensive Django Admin view for WhatsApp chat groups displaying member counts, participant lists, and admin roles.
+Deployment,Production Cloud Deployment & Render Sync,Fully configured Django Channels ASGI Daphne backend with dynamic Render environment auto-mapping, WhiteNoise static handling, and SPA client-side route rewrites.
