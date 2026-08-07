@@ -1,11 +1,11 @@
 import axios from 'axios';
 
-const RENDER_BACKEND_HOST = 'whatsapp-clone-backend-kd0k.onrender.com';
-const RENDER_BACKEND_ORIGIN = `https://${RENDER_BACKEND_HOST}`;
+const RAILWAY_BACKEND_HOST = 'web-production-d215e.up.railway.app';
+const RAILWAY_BACKEND_ORIGIN = `https://${RAILWAY_BACKEND_HOST}`;
 
 let defaultApiBase = '/api/';
-if (typeof window !== 'undefined' && window.location.host.includes('.onrender.com')) {
-  defaultApiBase = `${RENDER_BACKEND_ORIGIN}/api/`;
+if (typeof window !== 'undefined' && !window.location.host.includes('localhost') && !window.location.host.includes('127.0.0.1')) {
+  defaultApiBase = `${RAILWAY_BACKEND_ORIGIN}/api/`;
 }
 
 const rawApiUrl = import.meta.env.VITE_API_URL;
@@ -51,8 +51,8 @@ export const getWebSocketUrl = (path) => {
   }
 
   let host = window.location.host;
-  if (host.includes('.onrender.com')) {
-    host = RENDER_BACKEND_HOST;
+  if (!host.includes('localhost') && !host.includes('127.0.0.1')) {
+    host = RAILWAY_BACKEND_HOST;
   }
 
   const cleanPath = path.startsWith('/') ? path : '/' + path;
