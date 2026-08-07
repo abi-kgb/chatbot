@@ -3,12 +3,19 @@ import axios from 'axios';
 let defaultApiBase = '/api/';
 if (typeof window !== 'undefined' && window.location.host.includes('.onrender.com')) {
   const host = window.location.host;
-  let backendDomain = host;
   if (host.includes('frontend')) {
-    // Map whatsapp-clone-frontend-tn8c.onrender.com -> whatsapp-clone-backend-tn8c.onrender.com
-    backendDomain = host.replace('frontend', 'backend');
+    const backendDomain = host.replace('frontend', 'backend');
+    defaultApiBase = `${window.location.protocol}//${backendDomain}/api/`;
+  } else if (host.includes('-ui')) {
+    const backendDomain = host.replace('-ui', '-backend');
+    defaultApiBase = `${window.location.protocol}//${backendDomain}/api/`;
+  } else if (host.includes('-client')) {
+    const backendDomain = host.replace('-client', '-backend');
+    defaultApiBase = `${window.location.protocol}//${backendDomain}/api/`;
+  } else {
+    // Relative /api/ path for unified single-service deployments or custom proxies
+    defaultApiBase = '/api/';
   }
-  defaultApiBase = `${window.location.protocol}//${backendDomain}/api/`;
 }
 
 const rawApiUrl = import.meta.env.VITE_API_URL;
@@ -57,6 +64,10 @@ export const getWebSocketUrl = (path) => {
   if (host.includes('.onrender.com')) {
     if (host.includes('frontend')) {
       host = host.replace('frontend', 'backend');
+    } else if (host.includes('-ui')) {
+      host = host.replace('-ui', '-backend');
+    } else if (host.includes('-client')) {
+      host = host.replace('-client', '-backend');
     }
   }
 
