@@ -5,13 +5,7 @@ const RENDER_BACKEND_ORIGIN = `https://${RENDER_BACKEND_HOST}`;
 
 let defaultApiBase = '/api/';
 if (typeof window !== 'undefined' && window.location.host.includes('.onrender.com')) {
-  const host = window.location.host;
-  if (host.includes('frontend')) {
-    const backendDomain = host.replace('frontend', 'backend');
-    defaultApiBase = `${window.location.protocol}//${backendDomain}/api/`;
-  } else {
-    defaultApiBase = `${RENDER_BACKEND_ORIGIN}/api/`;
-  }
+  defaultApiBase = `${RENDER_BACKEND_ORIGIN}/api/`;
 }
 
 const rawApiUrl = import.meta.env.VITE_API_URL;
@@ -58,11 +52,7 @@ export const getWebSocketUrl = (path) => {
 
   let host = window.location.host;
   if (host.includes('.onrender.com')) {
-    if (host.includes('frontend')) {
-      host = host.replace('frontend', 'backend');
-    } else {
-      host = RENDER_BACKEND_HOST;
-    }
+    host = RENDER_BACKEND_HOST;
   }
 
   const cleanPath = path.startsWith('/') ? path : '/' + path;
