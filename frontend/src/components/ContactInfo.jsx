@@ -41,6 +41,9 @@ function ContactInfo({ participant, group, currentUser, onClose, onUpdateGroup }
         if (onUpdateGroup) {
            onUpdateGroup({ ...group, name: res.data.name });
         }
+      } else if (participant?.id === user?.id) {
+        await api.patch('users/me/', { username: editName.trim() });
+        fetchContacts();
       } else {
         if (isContact) {
           await updateContact(isContact.id, participant.id, editName.trim());

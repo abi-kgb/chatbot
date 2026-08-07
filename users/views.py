@@ -105,5 +105,17 @@ class ContactViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         return Contact.objects.filter(user=self.request.user)
 
+    def create(self, request, *args, **kwargs):
+        contact_user_id = request.data.get('contact_user_id')
+        saved_name = request.data.get('saved_name')
+        if contact_user_id:
+            existing = Contact.objects.filter(user=request.user, contact_user_id=contact_user_id).first()
+            if existing:
+                existing.saved_name = saved_name
+                existing.save()
+                serializer = self.get_serializer(existing)
+                return Response(serializer.data, status=200)
+        return super().create(request, *args, **kwargs)
+
     def perform_create(self, serializer):
         serializer.save(user=self.request.user)
