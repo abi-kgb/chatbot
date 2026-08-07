@@ -6,5 +6,7 @@ db.sqlite3
 media/
 frontend/node_modules/
 frontend/dist/
+.gradle/
+**/build/
 .vscode/
 .idea/

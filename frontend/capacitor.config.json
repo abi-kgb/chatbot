@@ -1,0 +1,9 @@
+{
+  "appId": "com.whatsapp.clone",
+  "appName": "WhatsApp Clone",
+  "webDir": "dist",
+  "server": {
+    "androidScheme": "https",
+    "cleartext": true
+  }
+}
