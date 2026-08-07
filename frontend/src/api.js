@@ -1,20 +1,16 @@
 import axios from 'axios';
 
+const RENDER_BACKEND_HOST = 'whatsapp-clone-backend-kd0k.onrender.com';
+const RENDER_BACKEND_ORIGIN = `https://${RENDER_BACKEND_HOST}`;
+
 let defaultApiBase = '/api/';
 if (typeof window !== 'undefined' && window.location.host.includes('.onrender.com')) {
   const host = window.location.host;
   if (host.includes('frontend')) {
     const backendDomain = host.replace('frontend', 'backend');
     defaultApiBase = `${window.location.protocol}//${backendDomain}/api/`;
-  } else if (host.includes('-ui')) {
-    const backendDomain = host.replace('-ui', '-backend');
-    defaultApiBase = `${window.location.protocol}//${backendDomain}/api/`;
-  } else if (host.includes('-client')) {
-    const backendDomain = host.replace('-client', '-backend');
-    defaultApiBase = `${window.location.protocol}//${backendDomain}/api/`;
   } else {
-    // Relative /api/ path for unified single-service deployments or custom proxies
-    defaultApiBase = '/api/';
+    defaultApiBase = `${RENDER_BACKEND_ORIGIN}/api/`;
   }
 }
 
@@ -64,10 +60,8 @@ export const getWebSocketUrl = (path) => {
   if (host.includes('.onrender.com')) {
     if (host.includes('frontend')) {
       host = host.replace('frontend', 'backend');
-    } else if (host.includes('-ui')) {
-      host = host.replace('-ui', '-backend');
-    } else if (host.includes('-client')) {
-      host = host.replace('-client', '-backend');
+    } else {
+      host = RENDER_BACKEND_HOST;
     }
   }
 
