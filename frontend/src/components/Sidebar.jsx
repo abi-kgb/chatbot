@@ -167,6 +167,7 @@ function Sidebar({ user, onLogout, conversations, groups, activeChat, onSelectCh
   };
 
   const startConversation = async (otherUserId) => {
+    if (!user?.id || !otherUserId) return;
     try {
       const res = await api.post('chat/conversations/', { participants: [user.id, otherUserId] });
       await refreshChats();
@@ -174,7 +175,7 @@ function Sidebar({ user, onLogout, conversations, groups, activeChat, onSelectCh
       setSearchQuery('');
       setIsSearching(false);
     } catch (err) {
-      console.error(err);
+      console.error("Failed to start conversation:", err);
     }
   };
 

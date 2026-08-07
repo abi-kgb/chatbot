@@ -15,7 +15,13 @@ function Login({ onLogin }) {
       const res = await api.post('users/login/', { username, password });
       onLogin(res.data.access);
     } catch (err) {
-      setError('Invalid username or password');
+      if (err.response && err.response.data && err.response.data.detail) {
+        setError(err.response.data.detail);
+      } else if (!err.response) {
+        setError('Cannot connect to server. Please check your connection or wait if the backend server is starting up.');
+      } else {
+        setError('Invalid username or password');
+      }
     }
   };
 
