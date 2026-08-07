@@ -18,7 +18,7 @@ function Login({ onLogin }) {
       if (err.response && err.response.data && err.response.data.detail) {
         setError(err.response.data.detail);
       } else if (!err.response) {
-        setError('Cannot connect to server. Please check your connection or wait if the backend server is starting up.');
+        setError('Cannot connect to server. Render free backend may be waking up (takes ~30s). Please wait a moment and click Log In again.');
       } else {
         setError('Invalid username or password');
       }
