@@ -1,7 +1,21 @@
 import axios from 'axios';
 
+const RAILWAY_BACKEND_HOST = 'web-production-2e232.up.railway.app';
+const RAILWAY_BACKEND_ORIGIN = `https://${RAILWAY_BACKEND_HOST}`;
+
+let defaultApiBase = '/api/';
+if (typeof window !== 'undefined') {
+  const host = window.location.host;
+  const isMobileApp = window.location.protocol === 'file:' || 
+                      (window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform()) || 
+                      (!host.includes('5173') && !host.includes('8000') && !host.includes('127.0.0.1'));
+  if (isMobileApp) {
+    defaultApiBase = `${RAILWAY_BACKEND_ORIGIN}/api/`;
+  }
+}
+
 const rawApiUrl = import.meta.env.VITE_API_URL;
-const API_BASE_URL = (rawApiUrl && !rawApiUrl.includes('your-backend-name')) ? rawApiUrl : '/api/';
+const API_BASE_URL = (rawApiUrl && !rawApiUrl.includes('your-backend-name')) ? rawApiUrl : defaultApiBase;
 
 const api = axios.create({
     baseURL: API_BASE_URL,
@@ -42,7 +56,11 @@ export const getWebSocketUrl = (path) => {
     return `${customWs}${path.startsWith('/') ? path : '/' + path}`;
   }
 
-  const host = window.location.host;
+  let host = window.location.host;
+  if (!host || (!host.includes('5173') && !host.includes('8000'))) {
+    host = RAILWAY_BACKEND_HOST;
+  }
+
   const cleanPath = path.startsWith('/') ? path : '/' + path;
   return `${wsProtocol}//${host}${cleanPath}`;
 };
