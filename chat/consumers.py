@@ -59,7 +59,7 @@ class ChatConsumer(AsyncWebsocketConsumer):
 
 class GlobalConsumer(AsyncWebsocketConsumer):
     async def connect(self):
-        self.user_id = self.scope['url_route']['kwargs']['user_id']
+        self.user_id = str(self.scope['url_route']['kwargs']['user_id'])
         self.global_group_name = f'user_{self.user_id}'
 
         await self.channel_layer.group_add(
@@ -82,7 +82,7 @@ class GlobalConsumer(AsyncWebsocketConsumer):
         # Route global signaling messages to specific target users
         if event_type in ['call_offer', 'call_answer', 'ice_candidate', 'call_end', 'call_reject'] and target_user:
             await self.channel_layer.group_send(
-                f'user_{target_user}',
+                f'user_{str(target_user)}',
                 {
                     'type': 'global_event',
                     'event': data

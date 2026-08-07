@@ -827,21 +827,23 @@ function StatusSidebar({ user, onSelectChat, onLogout, onRequestAppLock, onUnvie
 
                 {showViewersDrawer && (
                   <div style={{
-                    position: 'absolute', bottom: '60px', width: '360px', maxWidth: '90%', backgroundColor: 'var(--bg-primary)',
-                    borderRadius: '12px', padding: '16px', border: '1px solid var(--border-color)', boxShadow: '0 10px 30px rgba(0,0,0,0.8)',
-                    maxHeight: '300px', overflowY: 'auto'
+                    position: 'fixed', bottom: '20px', left: '50%', transform: 'translateX(-50%)',
+                    width: '380px', maxWidth: '92vw', backgroundColor: 'var(--bg-primary)',
+                    borderRadius: '16px', padding: '18px', border: '1px solid var(--border-color)',
+                    boxShadow: '0 12px 36px rgba(0,0,0,0.95)', zIndex: 10005,
+                    maxHeight: '65vh', overflowY: 'auto'
                   }}>
-                    <h4 style={{ margin: '0 0 12px 0', color: 'var(--text-primary)', borderBottom: '1px solid var(--border-color)', paddingBottom: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><Eye size={18} /> Story Views</span>
-                      <button onClick={() => setShowViewersDrawer(false)} style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', display: 'flex', alignItems: 'center' }}><X size={20} /></button>
+                    <h4 style={{ margin: '0 0 12px 0', color: 'var(--text-primary)', borderBottom: '1px solid var(--border-color)', paddingBottom: '10px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '16px' }}>
+                      <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><Eye size={20} color="#00a884" /> Story Views ({currentActiveStory.views?.length || 0})</span>
+                      <button onClick={() => { setShowViewersDrawer(false); setIsPaused(false); }} style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', display: 'flex', alignItems: 'center', padding: '4px' }}><X size={22} /></button>
                     </h4>
                     {!currentActiveStory.views || currentActiveStory.views.length === 0 ? (
-                      <div style={{ color: 'var(--text-secondary)', textAlign: 'center', padding: '20px', fontSize: '14px' }}>No views yet.</div>
+                      <div style={{ color: 'var(--text-secondary)', textAlign: 'center', padding: '24px 10px', fontSize: '14px' }}>No views yet.</div>
                     ) : (
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                         {currentActiveStory.views.map(v => (
-                          <div key={v.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '4px 0' }}>
-                            <span style={{ fontWeight: '600', color: 'var(--text-primary)' }}>{v.viewer.username}</span>
+                          <div key={v.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 4px', borderBottom: '1px solid var(--border-color)' }}>
+                            <span style={{ fontWeight: '600', color: 'var(--text-primary)', fontSize: '15px' }}>{v.viewer?.username || 'User'}</span>
                             <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
                               {new Date(v.viewed_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                             </span>
