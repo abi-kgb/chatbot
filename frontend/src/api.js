@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const RAILWAY_BACKEND_HOST = 'web-production-2e232.up.railway.app';
+const RAILWAY_BACKEND_HOST = 'web-production-fe89e0.up.railway.app';
 const RAILWAY_BACKEND_ORIGIN = `https://${RAILWAY_BACKEND_HOST}`;
 
 let defaultApiBase = '/api/';
