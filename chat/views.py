@@ -16,8 +16,13 @@ class ConversationViewSet(viewsets.ModelViewSet):
     def create(self, request, *args, **kwargs):
         participant_ids = request.data.get('participants', [])
         if len(participant_ids) == 2:
-            # Check if conversation already exists between these two users
-            existing = Conversation.objects.filter(participants=participant_ids[0]).filter(participants=participant_ids[1])
+            p1, p2 = participant_ids[0], participant_ids[1]
+            from django.db.models import Count
+            if str(p1) == str(p2):
+                existing = Conversation.objects.annotate(num_p=Count('participants')).filter(num_p=1, participants=p1)
+            else:
+                existing = Conversation.objects.annotate(num_p=Count('participants')).filter(num_p=2, participants=p1).filter(participants=p2)
+            
             if existing.exists():
                 conversation = existing.first()
                 if request.user in conversation.deleted_by.all():
