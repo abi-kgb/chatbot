@@ -80,50 +80,13 @@ AUTH_USER_MODEL = 'users.User'
 LOGIN_URL = 'users:login'
 LOGIN_REDIRECT_URL = 'chat:index'
 
-# Database configuration: Use DATABASE_URL if available (Render), fallback to SQLite on Render or MySQL on local
-DATABASE_URL = os.environ.get('DATABASE_URL')
-IS_RENDER = 'RENDER' in os.environ or 'RENDER_SERVICE_ID' in os.environ
-USE_MYSQL = os.environ.get('USE_MYSQL', '0') == '1'
-
-if DATABASE_URL:
-    DATABASES = {
-        'default': dj_database_url.config(
-            default=DATABASE_URL,
-            conn_max_age=600,
-            conn_health_checks=True,
-        )
+# Database configuration: Clean local SQLite database
+DATABASES = {
+    'default': {
+        'ENGINE': 'django.db.backends.sqlite3',
+        'NAME': BASE_DIR / 'db.sqlite3',
     }
-elif IS_RENDER or not USE_MYSQL:
-    DATABASES = {
-        'default': {
-            'ENGINE': 'django.db.backends.sqlite3',
-            'NAME': BASE_DIR / 'db.sqlite3',
-        }
-    }
-else:
-    try:
-        import pymysql
-        pymysql.install_as_MySQLdb()
-        DATABASES = {
-            'default': {
-                'ENGINE': 'django.db.backends.mysql',
-                'NAME': 'chatbox',
-                'USER': 'root',
-                'PASSWORD': '',
-                'HOST': 'localhost',
-                'PORT': '3306',
-                'OPTIONS': {
-                    'charset': 'utf8mb4',
-                }
-            }
-        }
-    except Exception:
-        DATABASES = {
-            'default': {
-                'ENGINE': 'django.db.backends.sqlite3',
-                'NAME': BASE_DIR / 'db.sqlite3',
-            }
-        }
+}
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 

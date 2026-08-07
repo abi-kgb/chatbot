@@ -44,7 +44,7 @@ function Register({ onLogin }) {
           setError('Registration failed. Please try again.');
         }
       } else {
-        setError('Render backend is building or waking up (~30s on free tier). Please wait a few seconds and try clicking Sign Up again.');
+        setError('Cannot connect to server. Please check if the backend server is running.');
       }
     } finally {
       setIsLoading(false);

@@ -1,15 +1,7 @@
 import axios from 'axios';
 
-const RAILWAY_BACKEND_HOST = 'web-production-2e232.up.railway.app';
-const RAILWAY_BACKEND_ORIGIN = `https://${RAILWAY_BACKEND_HOST}`;
-
-let defaultApiBase = '/api/';
-if (typeof window !== 'undefined' && !window.location.host.includes('localhost') && !window.location.host.includes('127.0.0.1')) {
-  defaultApiBase = `${RAILWAY_BACKEND_ORIGIN}/api/`;
-}
-
 const rawApiUrl = import.meta.env.VITE_API_URL;
-const API_BASE_URL = (rawApiUrl && !rawApiUrl.includes('your-backend-name')) ? rawApiUrl : defaultApiBase;
+const API_BASE_URL = (rawApiUrl && !rawApiUrl.includes('your-backend-name')) ? rawApiUrl : '/api/';
 
 const api = axios.create({
     baseURL: API_BASE_URL,
@@ -50,11 +42,7 @@ export const getWebSocketUrl = (path) => {
     return `${customWs}${path.startsWith('/') ? path : '/' + path}`;
   }
 
-  let host = window.location.host;
-  if (!host.includes('localhost') && !host.includes('127.0.0.1')) {
-    host = RAILWAY_BACKEND_HOST;
-  }
-
+  const host = window.location.host;
   const cleanPath = path.startsWith('/') ? path : '/' + path;
   return `${wsProtocol}//${host}${cleanPath}`;
 };
