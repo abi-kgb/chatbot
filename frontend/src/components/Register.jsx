@@ -17,8 +17,12 @@ function Register({ onLogin }) {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
+  const [isLoading, setIsLoading] = useState(false);
+
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setError('');
+    setIsLoading(true);
     try {
       await api.post('users/register/', formData);
       const res = await api.post('users/login/', { 
@@ -40,8 +44,10 @@ function Register({ onLogin }) {
           setError('Registration failed. Please try again.');
         }
       } else {
-        setError('Server is spinning up or offline. Please wait 10 seconds and try again.');
+        setError('Render backend is building or waking up (~30s on free tier). Please wait a few seconds and try clicking Sign Up again.');
       }
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -111,7 +117,9 @@ function Register({ onLogin }) {
               Must be a unique phone number.
             </small>
           </div>
-          <button type="submit" className="btn-primary">Sign Up</button>
+          <button type="submit" className="btn-primary" disabled={isLoading}>
+            {isLoading ? 'Connecting & Registering...' : 'Sign Up'}
+          </button>
         </form>
         <div className="auth-links">
           Already have an account? <Link to="/login">Log in here</Link>
