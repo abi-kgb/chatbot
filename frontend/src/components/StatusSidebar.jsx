@@ -324,7 +324,9 @@ function StatusSidebar({ user, onSelectChat, onLogout, onRequestAppLock, onUnvie
   };
 
   return (
-    <div className={`sidebar ${className}`} style={{ display: 'flex', flexDirection: 'column', height: '100%', borderRight: '1px solid var(--border-color)', backgroundColor: 'var(--bg-secondary)' }}>
+    <>
+      <div className={`sidebar ${className}`} style={{ display: 'flex', flexDirection: 'column', height: '100%', borderRight: '1px solid var(--border-color)', backgroundColor: 'var(--bg-secondary)' }}>
+
       {/* Hidden File Input for Media Studio */}
       <input
         type="file"
@@ -415,18 +417,9 @@ function StatusSidebar({ user, onSelectChat, onLogout, onRequestAppLock, onUnvie
           </div>
         </div>
 
-        {/* Recent Updates */}
+        {/* Contact Updates */}
         <div style={{ padding: '0 16px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
-            <span style={{ fontSize: '13px', fontWeight: '700', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-              Recent Updates
-            </span>
-            {contactGroups.some(g => g.unviewedCount > 0) && (
-              <span style={{ backgroundColor: '#00a884', color: 'white', fontSize: '11px', fontWeight: '800', padding: '2px 8px', borderRadius: '12px' }}>
-                {contactGroups.reduce((acc, g) => acc + g.unviewedCount, 0)} New
-              </span>
-            )}
-          </div>
+
           {loading ? (
             <div style={{ padding: '20px', textAlign: 'center', color: 'var(--text-secondary)', fontSize: '14px' }}>Loading statuses...</div>
           ) : contactGroups.length === 0 ? (
@@ -434,45 +427,112 @@ function StatusSidebar({ user, onSelectChat, onLogout, onRequestAppLock, onUnvie
               No status updates from contacts in the last 24 hours.
             </div>
           ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-              {contactGroups.map(group => (
-                <div
-                  key={group.user.id}
-                  onClick={() => openStoryViewer(group, 0)}
-                  style={{
-                    display: 'flex', alignItems: 'center', gap: '14px', padding: '10px 12px',
-                    borderRadius: '8px', cursor: 'pointer', transition: 'background 0.2s'
-                  }}
-                  onMouseOver={e => e.currentTarget.style.backgroundColor = 'var(--bg-primary)'}
-                  onMouseOut={e => e.currentTarget.style.backgroundColor = 'transparent'}
-                >
-                  <div style={{
-                    width: '48px', height: '48px', borderRadius: '50%', flexShrink: 0,
-                    padding: '2px', border: group.unviewedCount > 0 ? '3px solid #00a884' : '3px solid #667781',
-                    display: 'flex', justifyContent: 'center', alignItems: 'center'
-                  }}>
-                    <div style={{ width: '100%', height: '100%', borderRadius: '50%', backgroundColor: 'var(--primary-color)', overflow: 'hidden', display: 'flex', justifyContent: 'center', alignItems: 'center', color: 'white', fontSize: '18px', fontWeight: 'bold' }}>
-                      {group.user.avatar ? (
-                        <img src={getMediaUrl(group.user.avatar)} alt={group.user.username} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                      ) : (
-                        getDisplayName(group.user, true).charAt(0).toUpperCase()
-                      )}
-                    </div>
+            <>
+              {/* Recent Updates (Unviewed) */}
+              {contactGroups.filter(g => g.unviewedCount > 0).length > 0 && (
+                <div style={{ marginBottom: '15px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
+                    <span style={{ fontSize: '13px', fontWeight: '700', color: '#00a884', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                      Recent Updates
+                    </span>
+                    <span style={{ backgroundColor: '#00a884', color: 'white', fontSize: '11px', fontWeight: '800', padding: '2px 8px', borderRadius: '12px' }}>
+                      {contactGroups.reduce((acc, g) => acc + g.unviewedCount, 0)} New
+                    </span>
                   </div>
-                  <div style={{ flex: 1, overflow: 'hidden' }}>
-                    <div style={{ fontWeight: '600', color: 'var(--text-primary)', fontSize: '16px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                      {getDisplayName(group.user, true)}
-                    </div>
-                    <div style={{ fontSize: '13px', color: group.unviewedCount > 0 ? '#00a884' : 'var(--text-secondary)', marginTop: '2px', fontWeight: group.unviewedCount > 0 ? '600' : 'normal' }}>
-                      {group.unviewedCount > 0 ? `NEW (${group.unviewedCount})` : 'Viewed'} • {new Date(group.stories[group.stories.length - 1].created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                    </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                    {contactGroups.filter(g => g.unviewedCount > 0).map(group => (
+                      <div
+                        key={group.user.id}
+                        onClick={() => openStoryViewer(group, 0)}
+                        style={{
+                          display: 'flex', alignItems: 'center', gap: '14px', padding: '10px 12px',
+                          borderRadius: '8px', cursor: 'pointer', transition: 'background 0.2s'
+                        }}
+                        onMouseOver={e => e.currentTarget.style.backgroundColor = 'var(--bg-primary)'}
+                        onMouseOut={e => e.currentTarget.style.backgroundColor = 'transparent'}
+                      >
+                        <div style={{
+                          width: '48px', height: '48px', borderRadius: '50%', flexShrink: 0,
+                          padding: '2px', border: '3px solid #00a884',
+                          display: 'flex', justifyContent: 'center', alignItems: 'center'
+                        }}>
+                          <div style={{ width: '100%', height: '100%', borderRadius: '50%', backgroundColor: 'var(--primary-color)', overflow: 'hidden', display: 'flex', justifyContent: 'center', alignItems: 'center', color: 'white', fontSize: '18px', fontWeight: 'bold' }}>
+                            {group.user.avatar ? (
+                              <img src={getMediaUrl(group.user.avatar)} alt={group.user.username} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                            ) : (
+                              getDisplayName(group.user, true).charAt(0).toUpperCase()
+                            )}
+                          </div>
+                        </div>
+                        <div style={{ flex: 1, overflow: 'hidden' }}>
+                          <div style={{ fontWeight: '600', color: 'var(--text-primary)', fontSize: '16px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                            {getDisplayName(group.user, true)}
+                          </div>
+                          <div style={{ fontSize: '13px', color: '#00a884', marginTop: '2px', fontWeight: '600' }}>
+                            NEW ({group.unviewedCount}) • {new Date(group.stories[group.stories.length - 1].created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 </div>
-              ))}
-            </div>
+              )}
+
+              {/* Viewed Updates */}
+              {contactGroups.filter(g => g.unviewedCount === 0).length > 0 && (
+                <div style={{ marginTop: '10px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
+                    <span style={{ fontSize: '13px', fontWeight: '700', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                      Viewed Updates
+                    </span>
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                    {contactGroups.filter(g => g.unviewedCount === 0).map(group => (
+                      <div
+                        key={group.user.id}
+                        onClick={() => openStoryViewer(group, 0)}
+                        style={{
+                          display: 'flex', alignItems: 'center', gap: '14px', padding: '10px 12px',
+                          borderRadius: '8px', cursor: 'pointer', transition: 'background 0.2s', opacity: 0.85
+                        }}
+                        onMouseOver={e => e.currentTarget.style.backgroundColor = 'var(--bg-primary)'}
+                        onMouseOut={e => e.currentTarget.style.backgroundColor = 'transparent'}
+                      >
+                        <div style={{
+                          width: '48px', height: '48px', borderRadius: '50%', flexShrink: 0,
+                          padding: '2px', border: '3px solid #667781',
+                          display: 'flex', justifyContent: 'center', alignItems: 'center'
+                        }}>
+                          <div style={{ width: '100%', height: '100%', borderRadius: '50%', backgroundColor: 'var(--primary-color)', overflow: 'hidden', display: 'flex', justifyContent: 'center', alignItems: 'center', color: 'white', fontSize: '18px', fontWeight: 'bold' }}>
+                            {group.user.avatar ? (
+                              <img src={getMediaUrl(group.user.avatar)} alt={group.user.username} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                            ) : (
+                              getDisplayName(group.user, true).charAt(0).toUpperCase()
+                            )}
+                          </div>
+                        </div>
+                        <div style={{ flex: 1, overflow: 'hidden' }}>
+                          <div style={{ fontWeight: '600', color: 'var(--text-primary)', fontSize: '16px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                            {getDisplayName(group.user, true)}
+                          </div>
+                          <div style={{ fontSize: '13px', color: 'var(--text-secondary)', marginTop: '2px' }}>
+                            Viewed • {new Date(group.stories[group.stories.length - 1].created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </>
           )}
         </div>
       </div>
+    </div>
+
+
+
+
 
       {/* Create Status Modal */}
       {showCreateModal && (
@@ -920,8 +980,9 @@ function StatusSidebar({ user, onSelectChat, onLogout, onRequestAppLock, onUnvie
           </div>
         </div>
       )}
-    </div>
+    </>
   );
 }
+
 
 export default StatusSidebar;

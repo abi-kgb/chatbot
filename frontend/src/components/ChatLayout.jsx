@@ -106,93 +106,130 @@ function ChatLayout({ user, setUser, onLogout, onRequestAppLock }) {
 
   useEffect(() => {
     if (!user) return;
-    const ws = new WebSocket(getWebSocketUrl(`/ws/global/${user.id}/`));
-    globalWsRef.current = ws;
+    let ws = null;
+    let isDisposed = false;
+    let reconnectTimeout = null;
 
-    ws.onmessage = (e) => {
-      const data = JSON.parse(e.data);
-      if (data.type === 'call_offer') {
-        callLoggedRef.current = false;
-        iceCandidateQueueRef.current = [];
-        setIncomingOffer(data.sdp);
-        setIsVideoCall(data.isVideo);
-        setActiveCallChat(data.chat);
-        setCallState('incoming');
-        startCallRingtone();
-      } else if (data.type === 'call_answer') {
-        stopCallRingtone();
-        if (peerConnectionRef.current) {
-          peerConnectionRef.current.setRemoteDescription(new RTCSessionDescription(data.sdp)).then(() => {
-            iceCandidateQueueRef.current.forEach(c => peerConnectionRef.current.addIceCandidate(new RTCIceCandidate(c)));
-            iceCandidateQueueRef.current = [];
-            setCallState('connected');
-            callStartTimeRef.current = Date.now();
-          });
-        }
-      } else if (data.type === 'profile_update') {
-        const updateParticipants = (chat) => {
-          if (chat.participants.some(p => p.id === data.user_id)) {
-            return {
-              ...chat,
-              participants: chat.participants.map(p => 
-                p.id === data.user_id ? { ...p, avatar: data.avatar, about: data.about, username: data.username } : p
-              )
-            };
-          }
-          return chat;
+    const connectWs = () => {
+      if (isDisposed) return;
+      try {
+        ws = new WebSocket(getWebSocketUrl(`/ws/global/${user.id}/`));
+        globalWsRef.current = ws;
+
+        ws.onopen = () => {
+          console.log('Global WebSocket connected');
         };
-        setConversations(prev => prev.map(updateParticipants));
-        setGroups(prev => prev.map(updateParticipants));
-        setActiveChat(prev => prev ? updateParticipants(prev) : prev);
-      } else if (data.type === 'ice_candidate') {
-        if (peerConnectionRef.current && peerConnectionRef.current.remoteDescription) {
-          peerConnectionRef.current.addIceCandidate(new RTCIceCandidate(data.candidate));
-        } else {
-          iceCandidateQueueRef.current.push(data.candidate);
-        }
-      } else if (data.type === 'call_end' || data.type === 'call_reject') {
-        const currentChat = activeCallChatRef.current;
-        const currentRole = callRoleRef.current;
-        const currentState = callStateRef.current;
-        const currentVideo = isVideoCallRef.current;
 
-        let finalStatus = data.type === 'call_reject' ? 'rejected' : 'completed';
-        if (currentState === 'calling' && data.type === 'call_end') finalStatus = 'missed';
-        
-        let duration = 0;
-        if (callStartTimeRef.current) {
-           duration = Math.floor((Date.now() - callStartTimeRef.current) / 1000);
-        }
-        
-        if (currentChat && currentRole) {
-           logCall(finalStatus, duration, currentChat, currentRole, currentVideo);
-        }
+        ws.onmessage = (e) => {
+          try {
+            const data = JSON.parse(e.data);
+            if (data.type === 'call_offer') {
+              callLoggedRef.current = false;
+              iceCandidateQueueRef.current = [];
+              setIncomingOffer(data.sdp);
+              setIsVideoCall(data.isVideo);
+              setActiveCallChat(data.chat);
+              setCallState('incoming');
+              startCallRingtone();
+            } else if (data.type === 'call_answer') {
+              stopCallRingtone();
+              if (peerConnectionRef.current) {
+                peerConnectionRef.current.setRemoteDescription(new RTCSessionDescription(data.sdp)).then(() => {
+                  iceCandidateQueueRef.current.forEach(c => peerConnectionRef.current.addIceCandidate(new RTCIceCandidate(c)));
+                  iceCandidateQueueRef.current = [];
+                  setCallState('connected');
+                  callStartTimeRef.current = Date.now();
+                });
+              }
+            } else if (data.type === 'profile_update') {
+              const updateParticipants = (chat) => {
+                if (chat.participants.some(p => String(p.id) === String(data.user_id))) {
+                  return {
+                    ...chat,
+                    participants: chat.participants.map(p => 
+                      String(p.id) === String(data.user_id) ? { ...p, avatar: data.avatar, about: data.about, username: data.username } : p
+                    )
+                  };
+                }
+                return chat;
+              };
+              setConversations(prev => prev.map(updateParticipants));
+              setGroups(prev => prev.map(updateParticipants));
+              setActiveChat(prev => prev ? updateParticipants(prev) : prev);
+            } else if (data.type === 'ice_candidate') {
+              if (peerConnectionRef.current && peerConnectionRef.current.remoteDescription) {
+                peerConnectionRef.current.addIceCandidate(new RTCIceCandidate(data.candidate));
+              } else {
+                iceCandidateQueueRef.current.push(data.candidate);
+              }
+            } else if (data.type === 'call_end' || data.type === 'call_reject') {
+              const currentChat = activeCallChatRef.current;
+              const currentRole = callRoleRef.current;
+              const currentState = callStateRef.current;
+              const currentVideo = isVideoCallRef.current;
 
-        if (peerConnectionRef.current) peerConnectionRef.current.close();
-        peerConnectionRef.current = null;
-        if (localStream) localStream.getTracks().forEach(t => t.stop());
-        stopCallRingtone();
-        setLocalStream(null);
-        setRemoteStream(null);
-        setCallState(null);
-        setIncomingOffer(null);
-        setActiveCallChat(null);
-        callRoleRef.current = null;
-        callStartTimeRef.current = null;
-      } else if (data.type === 'chat_message' || data.type === 'new_message') {
-        const msg = data.message;
-        if (msg) {
-          const senderUsername = msg.sender?.username || msg.sender;
-          const senderId = msg.sender?.id || msg.sender;
-          const isFromMe = senderId === user.id || senderUsername === user.username;
-          if (!isFromMe) {
-            playMessageNotificationSound();
+              let finalStatus = data.type === 'call_reject' ? 'rejected' : 'completed';
+              if (currentState === 'calling' && data.type === 'call_end') finalStatus = 'missed';
+              
+              let duration = 0;
+              if (callStartTimeRef.current) {
+                 duration = Math.floor((Date.now() - callStartTimeRef.current) / 1000);
+              }
+              
+              if (currentChat && currentRole) {
+                 logCall(finalStatus, duration, currentChat, currentRole, currentVideo);
+              }
+
+              if (peerConnectionRef.current) peerConnectionRef.current.close();
+              peerConnectionRef.current = null;
+              if (localStream) localStream.getTracks().forEach(t => t.stop());
+              stopCallRingtone();
+              setLocalStream(null);
+              setRemoteStream(null);
+              setCallState(null);
+              setIncomingOffer(null);
+              setActiveCallChat(null);
+              callRoleRef.current = null;
+              callStartTimeRef.current = null;
+            } else if (data.type === 'chat_message' || data.type === 'new_message') {
+              const msg = data.message;
+              if (msg) {
+                const senderUsername = msg.sender?.username || msg.sender;
+                const senderId = msg.sender?.id || msg.sender;
+                const isFromMe = String(senderId) === String(user.id) || String(senderUsername).toLowerCase() === String(user.username).toLowerCase();
+                if (!isFromMe) {
+                  playMessageNotificationSound();
+                }
+              }
+            }
+          } catch (err) {
+            console.error('WebSocket message parsing error:', err);
           }
+        };
+
+        ws.onclose = () => {
+          if (!isDisposed) {
+            reconnectTimeout = setTimeout(connectWs, 3000);
+          }
+        };
+
+        ws.onerror = () => {
+          ws.close();
+        };
+      } catch (err) {
+        if (!isDisposed) {
+          reconnectTimeout = setTimeout(connectWs, 3000);
         }
       }
     };
 
-    return () => ws.close();
+    connectWs();
+
+    return () => {
+      isDisposed = true;
+      if (reconnectTimeout) clearTimeout(reconnectTimeout);
+      if (ws) ws.close();
+    };
   }, [user]);
 
   const setupPeerConnection = (targetUserId) => {
@@ -207,25 +244,22 @@ function ChatLayout({ user, setUser, onLogout, onRequestAppLock }) {
       ]
     });
 
-
     pc.onicecandidate = (e) => {
       if (e.candidate && globalWsRef.current?.readyState === 1) {
         globalWsRef.current.send(JSON.stringify({ 
-          type: 'ice_candidate', candidate: e.candidate, target_user: targetUserId 
+          type: 'ice_candidate', candidate: e.candidate, target_user: String(targetUserId) 
         }));
       }
     };
     pc.ontrack = (e) => {
       setRemoteStream(prevStream => {
         if (prevStream) {
-          // If we already have a stream, add the new track to it
           const tracks = prevStream.getTracks();
           if (!tracks.find(t => t.id === e.track.id)) {
             return new MediaStream([...tracks, e.track]);
           }
           return prevStream;
         }
-        // First track arrives, create a new stream
         return new MediaStream([e.track]);
       });
       setCallState('connected');
@@ -237,7 +271,7 @@ function ChatLayout({ user, setUser, onLogout, onRequestAppLock }) {
 
   const startGlobalCall = async (chat, video = true) => {
     const isGroup = chat.isGroup;
-    const targetParticipant = chat.participants.find(p => p.id !== user.id);
+    const targetParticipant = chat.participants.find(p => String(p.id) !== String(user.id));
     if (isGroup || !targetParticipant) {
       return;
     }
