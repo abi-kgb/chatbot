@@ -489,11 +489,15 @@ function ChatWindow({ user, chat, onUpdateChat, onLogout, onStartCall, conversat
   };
 
   const canEditMessage = (msg) => {
-    if (!msg || msg.sender?.id !== user?.id || msg.is_deleted) return false;
+    if (!msg || String(msg.sender?.id) !== String(user?.id) || msg.is_deleted) return false;
+    if (msg.message_type && msg.message_type !== 'text') return false;
+    if (msg.content && /(Voice call|Video call|Missed call|Missed voice call|Missed video call)/i.test(msg.content)) return false;
+    if (msg.file) return false;
     const sentTime = new Date(msg.timestamp);
     const now = new Date();
     return (now - sentTime) <= 15 * 60 * 1000;
   };
+
 
   const handleReactToMessage = async (msgId, emoji) => {
     try {
@@ -1625,9 +1629,11 @@ function ChatWindow({ user, chat, onUpdateChat, onLogout, onStartCall, conversat
                     onClose={() => setShowAttachmentMenu(false)}
                     onSelect={(type) => {
                       if (type === 'photos') {
-                        document.getElementById('hidden-photo-input').click();
+                        setTimeout(() => document.getElementById('hidden-photo-input')?.click(), 10);
                       } else if (type === 'document') {
-                        document.getElementById('hidden-document-input').click();
+                        setTimeout(() => document.getElementById('hidden-document-input')?.click(), 10);
+                      } else if (type === 'camera') {
+                        setTimeout(() => document.getElementById('hidden-camera-input')?.click(), 10);
                       } else if (['poll', 'event', 'contact'].includes(type)) {
                         setActiveModal(type);
                       } else {
@@ -1636,9 +1642,11 @@ function ChatWindow({ user, chat, onUpdateChat, onLogout, onStartCall, conversat
                     }}
                   />
                 )}
-                <input id="hidden-photo-input" type="file" style={{ display: 'none' }} accept="image/png, image/jpeg, image/jpg, image/webp, video/mp4, video/webm" onChange={handleFileChange} />
-                <input id="hidden-document-input" type="file" style={{ display: 'none' }} accept=".pdf,.doc,.docx,.xls,.xlsx,.txt,.csv,.zip,.rar" onChange={handleFileChange} />
+                <input id="hidden-photo-input" type="file" style={{ display: 'none' }} accept="image/*,video/*" onChange={handleFileChange} />
+                <input id="hidden-document-input" type="file" style={{ display: 'none' }} accept="*/*" onChange={handleFileChange} />
+                <input id="hidden-camera-input" type="file" style={{ display: 'none' }} accept="image/*" capture="environment" onChange={handleFileChange} />
               </div>
+
               
               <div style={{ position: 'relative' }}>
                 <button type="button" onClick={() => setShowEmojiPicker(!showEmojiPicker)} title="Emojis, GIFs, Stickers" style={{ background: 'none', border: 'none', cursor: 'pointer', color: showEmojiPicker ? '#00a884' : 'var(--text-secondary)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>

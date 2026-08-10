@@ -285,45 +285,10 @@ function ChatLayout({ user, setUser, onLogout, onRequestAppLock }) {
     callLoggedRef.current = false;
 
     try {
-      let stream;
-      try {
-        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) throw new Error('Not supported');
-        stream = await navigator.mediaDevices.getUserMedia({ video, audio: true });
-      } catch (err) {
-        console.warn('Camera/mic unavailable, using mock stream for testing', err);
-        const canvas = document.createElement('canvas');
-        canvas.width = 640; canvas.height = 480;
-        const ctx = canvas.getContext('2d');
-        ctx.fillStyle = '#111b21';
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-        ctx.fillStyle = '#00a884';
-        ctx.font = '30px Arial';
-        ctx.fillText('Mock Video Stream', 180, 240);
-        setInterval(() => {
-           ctx.fillStyle = '#111b21';
-           ctx.fillRect(0, 0, canvas.width, canvas.height);
-           ctx.fillStyle = '#00a884';
-           ctx.fillText('Mock Video Stream', 180, 240);
-           ctx.beginPath();
-           ctx.arc((Date.now() / 10) % canvas.width, 300, 20, 0, 2 * Math.PI);
-           ctx.fill();
-        }, 100);
-        stream = canvas.captureStream(30);
-        
-        try {
-          const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-          audioCtx.resume();
-          const dest = audioCtx.createMediaStreamDestination();
-          const osc = audioCtx.createOscillator();
-          osc.type = 'sine';
-          osc.frequency.setValueAtTime(880, audioCtx.currentTime);
-          osc.connect(dest);
-          osc.start();
-          stream.addTrack(dest.stream.getAudioTracks()[0]);
-        } catch (e) {
-          console.warn('Could not mock audio', e);
-        }
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        throw new Error('Camera/Microphone API is not supported on this browser or origin.');
       }
+      const stream = await navigator.mediaDevices.getUserMedia({ video, audio: true });
       setLocalStream(stream);
       
       const pc = setupPeerConnection(targetUserId);
@@ -338,10 +303,10 @@ function ChatLayout({ user, setUser, onLogout, onRequestAppLock }) {
         }));
       }
     } catch (err) {
-      console.error(err);
+      console.error('Failed to access camera/microphone:', err);
       setCallState(null);
       setActiveCallChat(null);
-      showAlert('Device Error', 'Could not access microphone/camera.');
+      showAlert('Camera / Microphone Access Required', 'Please allow camera and microphone permissions in your phone settings to start voice and video calls.');
     }
   };
 
@@ -350,48 +315,14 @@ function ChatLayout({ user, setUser, onLogout, onRequestAppLock }) {
     setCallState('connecting');
     callRoleRef.current = 'receiver';
     callStartTimeRef.current = null;
-    const targetUserId = activeCallChat.participants.find(p => p.id !== user.id).id;
+    const targetUserId = activeCallChat.participants.find(p => String(p.id) !== String(user.id)).id;
     try {
-      let stream;
-      try {
-        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) throw new Error('Not supported');
-        stream = await navigator.mediaDevices.getUserMedia({ video: isVideoCall, audio: true });
-      } catch (err) {
-        console.warn('Camera/mic unavailable, using mock stream for testing', err);
-        const canvas = document.createElement('canvas');
-        canvas.width = 640; canvas.height = 480;
-        const ctx = canvas.getContext('2d');
-        ctx.fillStyle = '#111b21';
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-        ctx.fillStyle = '#00a884';
-        ctx.font = '30px Arial';
-        ctx.fillText('Mock Video Stream', 180, 240);
-        setInterval(() => {
-           ctx.fillStyle = '#111b21';
-           ctx.fillRect(0, 0, canvas.width, canvas.height);
-           ctx.fillStyle = '#00a884';
-           ctx.fillText('Mock Video Stream', 180, 240);
-           ctx.beginPath();
-           ctx.arc((Date.now() / 10) % canvas.width, 300, 20, 0, 2 * Math.PI);
-           ctx.fill();
-        }, 100);
-        stream = canvas.captureStream(30);
-        
-        try {
-          const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-          audioCtx.resume();
-          const dest = audioCtx.createMediaStreamDestination();
-          const osc = audioCtx.createOscillator();
-          osc.type = 'sine';
-          osc.frequency.setValueAtTime(880, audioCtx.currentTime);
-          osc.connect(dest);
-          osc.start();
-          stream.addTrack(dest.stream.getAudioTracks()[0]);
-        } catch (e) {
-          console.warn('Could not mock audio', e);
-        }
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        throw new Error('Camera/Microphone API is not supported on this browser or origin.');
       }
+      const stream = await navigator.mediaDevices.getUserMedia({ video: isVideoCall, audio: true });
       setLocalStream(stream);
+
       
       const pc = setupPeerConnection(targetUserId);
       stream.getTracks().forEach(track => pc.addTrack(track, stream));
