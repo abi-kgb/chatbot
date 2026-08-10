@@ -196,7 +196,18 @@ function ChatLayout({ user, setUser, onLogout, onRequestAppLock }) {
   }, [user]);
 
   const setupPeerConnection = (targetUserId) => {
-    const pc = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] });
+    const pc = new RTCPeerConnection({
+      iceServers: [
+        { urls: 'stun:stun.l.google.com:19302' },
+        { urls: 'stun:stun1.l.google.com:19302' },
+        { urls: 'stun:stun2.l.google.com:19302' },
+        { urls: 'stun:stun3.l.google.com:19302' },
+        { urls: 'stun:stun4.l.google.com:19302' },
+        { urls: 'stun:global.stun.twilio.com:3478' }
+      ]
+    });
+
+
     pc.onicecandidate = (e) => {
       if (e.candidate && globalWsRef.current?.readyState === 1) {
         globalWsRef.current.send(JSON.stringify({ 
