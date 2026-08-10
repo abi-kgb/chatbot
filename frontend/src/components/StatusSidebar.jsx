@@ -329,6 +329,7 @@ function StatusSidebar({ user, onSelectChat, onLogout, onRequestAppLock, onUnvie
 
       {/* Hidden File Input for Media Studio */}
       <input
+        id="status-media-file-input"
         type="file"
         ref={fileInputRef}
         accept="image/*,video/*"
@@ -360,15 +361,16 @@ function StatusSidebar({ user, onSelectChat, onLogout, onRequestAppLock, onUnvie
           >
             <FileText size={20} />
           </button>
-          <button
-            onClick={() => fileInputRef.current?.click()}
+          <label
+            htmlFor="status-media-file-input"
             title="Add Photo/Video Status"
             style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center' }}
           >
             <Camera size={20} />
-          </button>
+          </label>
         </div>
       </div>
+
 
       {/* Status List */}
       <div style={{ flex: 1, overflowY: 'auto', padding: '10px 0' }}>
