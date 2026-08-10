@@ -138,9 +138,15 @@ function StatusSidebar({ user, onSelectChat, onLogout, onRequestAppLock, onUnvie
       setTextContent('');
       setSelectedFile(null);
       fetchStatuses();
+      showAlert('✨ Status Posted!', 'Your status update has been published.');
     } catch (err) {
       console.error('Failed to create status:', err);
-      showAlert('Error', 'Failed to post status.');
+      const detail = err.response?.data ? (
+        typeof err.response.data === 'string' 
+          ? err.response.data 
+          : Object.entries(err.response.data).map(([k, v]) => `${k}: ${Array.isArray(v) ? v.join(', ') : v}`).join('\n')
+      ) : 'Failed to post status.';
+      showAlert('Error', detail);
     } finally {
       setIsSubmitting(false);
     }
@@ -161,11 +167,17 @@ function StatusSidebar({ user, onSelectChat, onLogout, onRequestAppLock, onUnvie
       showAlert('✨ Status Posted!', 'Your status update has been published.');
     } catch (err) {
       console.error('Failed to create status:', err);
-      showAlert('Error', 'Failed to post status.');
+      const detail = err.response?.data ? (
+        typeof err.response.data === 'string' 
+          ? err.response.data 
+          : Object.entries(err.response.data).map(([k, v]) => `${k}: ${Array.isArray(v) ? v.join(', ') : v}`).join('\n')
+      ) : 'Failed to post status.';
+      showAlert('Error', detail);
     } finally {
       setIsSubmitting(false);
     }
   };
+
 
   const openStoryViewer = async (groupObj, startIdx = 0) => {
     setViewingUserGroup(groupObj);
