@@ -51,8 +51,9 @@ from .models import Contact
 class ContactSerializer(serializers.ModelSerializer):
     contact_user = UserSerializer(read_only=True)
     contact_user_id = serializers.PrimaryKeyRelatedField(
-        queryset=User.objects.all(), source='contact_user', write_only=True
+        queryset=User.objects.all(), source='contact_user', write_only=True, required=False
     )
+
 
     class Meta:
         model = Contact
