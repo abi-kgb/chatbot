@@ -108,6 +108,8 @@ class ContactViewSet(viewsets.ModelViewSet):
     def create(self, request, *args, **kwargs):
         contact_user_id = request.data.get('contact_user_id')
         saved_name = request.data.get('saved_name')
+        if contact_user_id and str(contact_user_id) == str(request.user.id):
+            return Response({'error': 'You cannot add yourself as a contact. Edit your profile name in Settings.'}, status=400)
         if contact_user_id:
             existing = Contact.objects.filter(user=request.user, contact_user_id=contact_user_id).first()
             if existing:
@@ -116,6 +118,7 @@ class ContactViewSet(viewsets.ModelViewSet):
                 serializer = self.get_serializer(existing)
                 return Response(serializer.data, status=200)
         return super().create(request, *args, **kwargs)
+
 
     def perform_create(self, serializer):
         serializer.save(user=self.request.user)
