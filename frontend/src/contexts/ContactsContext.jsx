@@ -19,6 +19,7 @@ export const ContactsProvider = ({ user, children }) => {
       res.data.forEach(c => {
         if (c.contact_user) {
           newMap[c.contact_user.id] = c;
+          newMap[String(c.contact_user.id)] = c;
         }
       });
       setContactsMap(newMap);
@@ -39,7 +40,8 @@ export const ContactsProvider = ({ user, children }) => {
       });
       setContactsMap(prev => ({
         ...prev,
-        [contactUserId]: res.data
+        [contactUserId]: res.data,
+        [String(contactUserId)]: res.data
       }));
       return res.data;
     } catch (err) {
@@ -55,7 +57,8 @@ export const ContactsProvider = ({ user, children }) => {
       });
       setContactsMap(prev => ({
         ...prev,
-        [contactUserId]: res.data
+        [contactUserId]: res.data,
+        [String(contactUserId)]: res.data
       }));
       return res.data;
     } catch (err) {
@@ -66,12 +69,13 @@ export const ContactsProvider = ({ user, children }) => {
 
   const getDisplayName = (targetUser, fallbackToUsername = false) => {
     if (!targetUser) return '';
-    if (targetUser.id === user?.id) return 'You';
-    const contact = contactsMap[targetUser.id];
+    if (user?.id != null && String(targetUser.id) === String(user.id)) return 'You';
+    const contact = contactsMap[targetUser.id] || contactsMap[String(targetUser.id)];
     if (contact) return contact.saved_name;
     if (fallbackToUsername) return targetUser.username || targetUser.phone_number;
     return targetUser.phone_number;
   };
+
 
   return (
     <ContactsContext.Provider value={{ contactsMap, fetchContacts, addContact, updateContact, getDisplayName }}>

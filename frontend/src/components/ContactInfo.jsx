@@ -25,7 +25,7 @@ function ContactInfo({ participant, group, currentUser, onClose, onUpdateGroup }
   const currentMember = isGroup && group.members?.find(m => m.user?.id === currentUser?.id || m.user?.username === currentUser?.username);
   const isCurrentUserAdmin = currentMember?.role === 'admin' || currentUser?.is_superuser;
   const name = isGroup ? group.name : getDisplayName(participant);
-  const isContact = !isGroup && participant && contactsMap[participant.id];
+  const isContact = !isGroup && participant ? (contactsMap[participant.id] || contactsMap[String(participant.id)]) : null;
   const avatar = isGroup ? group.avatar : participant?.avatar;
   const status = isGroup ? `${group.members?.length} participants` : participant?.status_message || 'Hey there! I am using WhatsApp Clone.';
   const fullAvatarUrl = avatar ? (getMediaUrl(avatar)) : null;
@@ -41,8 +41,7 @@ function ContactInfo({ participant, group, currentUser, onClose, onUpdateGroup }
         if (onUpdateGroup) {
            onUpdateGroup({ ...group, name: res.data.name });
         }
-      } else if (String(participant?.id) === String(user?.id)) {
-
+      } else if (currentUser?.id != null && String(participant?.id) === String(currentUser.id)) {
         await api.patch('users/me/', { username: editName.trim() });
         fetchContacts();
       } else {
@@ -55,9 +54,15 @@ function ContactInfo({ participant, group, currentUser, onClose, onUpdateGroup }
       setIsEditingName(false);
     } catch (err) {
       console.error('Failed to update name', err);
-      showAlert('Error', 'Failed to update name.');
+      const detail = err.response?.data ? (
+        typeof err.response.data === 'string' 
+          ? err.response.data 
+          : Object.entries(err.response.data).map(([k, v]) => `${k}: ${Array.isArray(v) ? v.join(', ') : v}`).join('\n')
+      ) : 'Failed to update name.';
+      showAlert('Error', detail);
     }
   };
+
 
   const handleAvatarChange = async (e) => {
     if (e.target.files && e.target.files.length > 0) {
