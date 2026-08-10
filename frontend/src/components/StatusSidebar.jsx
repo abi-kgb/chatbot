@@ -345,7 +345,7 @@ function StatusSidebar({ user, onSelectChat, onLogout, onRequestAppLock, onUnvie
         type="file"
         ref={fileInputRef}
         accept="image/*,video/*"
-        style={{ display: 'none' }}
+        style={{ opacity: 0, position: 'absolute', width: '1px', height: '1px', zIndex: -1, pointerEvents: 'none' }}
         onChange={(e) => {
           if (e.target.files?.[0]) {
             const f = e.target.files[0];
@@ -359,6 +359,7 @@ function StatusSidebar({ user, onSelectChat, onLogout, onRequestAppLock, onUnvie
           }
         }}
       />
+
 
       {/* Header */}
       <div className="sidebar-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 16px', backgroundColor: 'var(--bg-primary)', borderBottom: '1px solid var(--border-color)' }}>

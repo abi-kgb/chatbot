@@ -85,8 +85,22 @@ function ProfileSettings({ user, setUser, onClose, onRequestAppLock, onLogout })
       }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
           <h2 style={{ margin: 0, color: 'var(--text-primary)' }}>Profile Settings</h2>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center' }}><X size={22} /></button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <button 
+              type="button" 
+              onClick={handleSave} 
+              disabled={isSaving} 
+              style={{
+                backgroundColor: 'var(--primary-color)', color: 'white', border: 'none',
+                borderRadius: '6px', padding: '6px 14px', fontWeight: 'bold', fontSize: '13px', cursor: 'pointer'
+              }}
+            >
+              {isSaving ? 'Saving...' : 'Save'}
+            </button>
+            <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center' }}><X size={22} /></button>
+          </div>
         </div>
+
 
         <form onSubmit={handleSave}>
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: '20px' }}>
@@ -108,12 +122,18 @@ function ProfileSettings({ user, setUser, onClose, onRequestAppLock, onLogout })
             </div>
             
             <label style={{
-              cursor: 'pointer', color: 'var(--primary-color)', fontWeight: 'bold', fontSize: '14px'
+              cursor: 'pointer', color: 'var(--primary-color)', fontWeight: 'bold', fontSize: '14px', position: 'relative'
             }}>
               Change Profile Photo
-              <input type="file" style={{ display: 'none' }} accept="image/png, image/jpeg, image/jpg, image/webp" onChange={handleFileChange} />
+              <input 
+                type="file" 
+                accept="image/*" 
+                onChange={handleFileChange} 
+                style={{ opacity: 0, position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', cursor: 'pointer' }} 
+              />
             </label>
           </div>
+
 
           <div style={{ marginBottom: '20px' }}>
             <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-secondary)', fontSize: '13px' }}>Username</label>

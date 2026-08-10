@@ -1629,11 +1629,11 @@ function ChatWindow({ user, chat, onUpdateChat, onLogout, onStartCall, conversat
                     onClose={() => setShowAttachmentMenu(false)}
                     onSelect={(type) => {
                       if (type === 'photos') {
-                        setTimeout(() => document.getElementById('hidden-photo-input')?.click(), 10);
+                        setTimeout(() => document.getElementById('hidden-photo-input')?.click(), 50);
                       } else if (type === 'document') {
-                        setTimeout(() => document.getElementById('hidden-document-input')?.click(), 10);
+                        setTimeout(() => document.getElementById('hidden-document-input')?.click(), 50);
                       } else if (type === 'camera') {
-                        setTimeout(() => document.getElementById('hidden-camera-input')?.click(), 10);
+                        setTimeout(() => document.getElementById('hidden-camera-input')?.click(), 50);
                       } else if (['poll', 'event', 'contact'].includes(type)) {
                         setActiveModal(type);
                       } else {
@@ -1642,10 +1642,11 @@ function ChatWindow({ user, chat, onUpdateChat, onLogout, onStartCall, conversat
                     }}
                   />
                 )}
-                <input id="hidden-photo-input" type="file" style={{ display: 'none' }} accept="image/*,video/*" onChange={handleFileChange} />
-                <input id="hidden-document-input" type="file" style={{ display: 'none' }} accept="*/*" onChange={handleFileChange} />
-                <input id="hidden-camera-input" type="file" style={{ display: 'none' }} accept="image/*" capture="environment" onChange={handleFileChange} />
+                <input id="hidden-photo-input" type="file" style={{ opacity: 0, position: 'absolute', width: '1px', height: '1px', zIndex: -1, pointerEvents: 'none' }} accept="image/*,video/*" onChange={handleFileChange} />
+                <input id="hidden-document-input" type="file" style={{ opacity: 0, position: 'absolute', width: '1px', height: '1px', zIndex: -1, pointerEvents: 'none' }} accept="*/*" onChange={handleFileChange} />
+                <input id="hidden-camera-input" type="file" style={{ opacity: 0, position: 'absolute', width: '1px', height: '1px', zIndex: -1, pointerEvents: 'none' }} accept="image/*" capture="environment" onChange={handleFileChange} />
               </div>
+
 
               
               <div style={{ position: 'relative' }}>
