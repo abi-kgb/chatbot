@@ -55,14 +55,21 @@ function ProfileSettings({ user, setUser, onClose, onRequestAppLock, onLogout })
       const res = await api.patch('users/me/', formData);
 
       setUser(res.data);
+      showAlert('Profile Updated! ✨', 'Your profile settings have been saved.');
       onClose();
     } catch (err) {
       console.error('Failed to update profile', err);
-      showAlert('Error', 'Failed to update profile.');
+      const detail = err.response?.data ? (
+        typeof err.response.data === 'string' 
+          ? err.response.data 
+          : Object.entries(err.response.data).map(([k, v]) => `${k}: ${Array.isArray(v) ? v.join(', ') : v}`).join('\n')
+      ) : 'Failed to update profile.';
+      showAlert('Error', detail);
     } finally {
       setIsSaving(false);
     }
   };
+
 
   const fullAvatarUrl = user?.avatar ? (getMediaUrl(user.avatar)) : null;
 
