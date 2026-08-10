@@ -74,9 +74,8 @@ function ContactInfo({ participant, group, currentUser, onClose, onUpdateGroup }
     setIsUploading(true);
     setCropImageSrc(null);
     try {
-      const res = await api.patch(`chat/groups/${group.id}/`, formData, {
-        headers: { 'Content-Type': 'multipart/form-data' }
-      });
+      const res = await api.patch(`chat/groups/${group.id}/`, formData);
+
       if (onUpdateGroup) {
          onUpdateGroup({ ...group, avatar: res.data.avatar });
       }

@@ -131,9 +131,8 @@ function StatusSidebar({ user, onSelectChat, onLogout, onRequestAppLock, onUnvie
         }
       }
 
-      await api.post('chat/statuses/', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' }
-      });
+      await api.post('chat/statuses/', formData);
+
 
       setShowCreateModal(false);
       setTextContent('');
@@ -156,9 +155,8 @@ function StatusSidebar({ user, onSelectChat, onLogout, onRequestAppLock, onUnvie
       if (caption) formData.append('content', caption);
       if (metadata) formData.append('metadata', JSON.stringify(metadata));
 
-      await api.post('chat/statuses/', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' }
-      });
+      await api.post('chat/statuses/', formData);
+
       fetchStatuses();
       showAlert('✨ Status Posted!', 'Your status update has been published.');
     } catch (err) {
@@ -244,9 +242,8 @@ function StatusSidebar({ user, onSelectChat, onLogout, onRequestAppLock, onUnvie
         timestamp: currentStory.created_at
       }));
 
-      await api.post(`chat/conversations/${convId}/messages/`, formData, {
-        headers: { 'Content-Type': 'multipart/form-data' }
-      });
+      await api.post(`chat/conversations/${convId}/messages/`, formData);
+
 
       if (!isEmoji && !mediaObj) setReplyText('');
       setShowReplyMediaPicker(false);

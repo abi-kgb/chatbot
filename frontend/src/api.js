@@ -36,9 +36,31 @@ export default api;
 export const getMediaUrl = (url) => {
   if (!url) return null;
   const rawBackend = import.meta.env.VITE_BACKEND_URL;
-  const backendHost = (rawBackend && !rawBackend.includes('your-backend-name')) ? rawBackend : API_BASE_URL.replace(/\/api\/?$/, '');
+  let backendHost = (rawBackend && !rawBackend.includes('your-backend-name')) ? rawBackend : API_BASE_URL.replace(/\/api\/?$/, '');
+
+  if (backendHost.startsWith('http://') && !backendHost.includes('127.0.0.1') && !backendHost.includes('localhost')) {
+    backendHost = backendHost.replace('http://', 'https://');
+  }
+
   try {
-    const urlString = typeof url === 'string' ? url : String(url);
+    let urlString = typeof url === 'string' ? url : String(url);
+
+    // If running in mobile app mode, rewrite localhost/127.0.0.1 URLs to cloud backend origin
+    if (typeof window !== 'undefined') {
+      const host = window.location.host;
+      const isMobileApp = window.location.protocol === 'file:' || 
+                          (window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform()) || 
+                          (!host.includes('5173') && !host.includes('8000') && !host.includes('127.0.0.1'));
+      if (isMobileApp) {
+        urlString = urlString.replace(/^http:\/\/(127\.0\.0\.1|localhost):8000/, RAILWAY_BACKEND_ORIGIN);
+      }
+    }
+
+    // Force https for remote HTTP media URLs (prevents cleartext blocks in Android WebViews)
+    if (urlString.startsWith('http://') && !urlString.includes('127.0.0.1') && !urlString.includes('localhost')) {
+      urlString = urlString.replace('http://', 'https://');
+    }
+
     if (urlString.startsWith('http://') || urlString.startsWith('https://')) {
       return urlString;
     }
@@ -49,7 +71,10 @@ export const getMediaUrl = (url) => {
 };
 
 export const getWebSocketUrl = (path) => {
-  const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+  const isHttpsOrMobile = window.location.protocol === 'https:' || 
+                          window.location.protocol === 'file:' || 
+                          (window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
+  const wsProtocol = isHttpsOrMobile ? 'wss:' : 'ws:';
   const customWs = import.meta.env.VITE_WS_URL;
   
   if (customWs && !customWs.includes('your-backend-name')) {
@@ -64,3 +89,4 @@ export const getWebSocketUrl = (path) => {
   const cleanPath = path.startsWith('/') ? path : '/' + path;
   return `${wsProtocol}//${host}${cleanPath}`;
 };
+

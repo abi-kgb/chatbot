@@ -345,9 +345,8 @@ function ChatWindow({ user, chat, onUpdateChat, onLogout, onStartCall, conversat
         formData.append('conversation', chat.id);
       }
         
-      const res = await api.post(endpoint, formData, {
-        headers: { 'Content-Type': 'multipart/form-data' }
-      });
+      const res = await api.post(endpoint, formData);
+
       
       shouldAutoScroll.current = true;
       setMessages(prev => {
@@ -389,9 +388,8 @@ function ChatWindow({ user, chat, onUpdateChat, onLogout, onStartCall, conversat
         formData.append('conversation', chat.id);
       }
         
-      const res = await api.post(endpoint, formData, {
-        headers: { 'Content-Type': 'multipart/form-data' }
-      });
+      const res = await api.post(endpoint, formData);
+
       
       shouldAutoScroll.current = true;
       setMessages(prev => {

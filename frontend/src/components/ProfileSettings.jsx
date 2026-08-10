@@ -52,9 +52,8 @@ function ProfileSettings({ user, setUser, onClose, onRequestAppLock, onLogout })
         formData.append('avatar', avatarFile);
       }
 
-      const res = await api.patch('users/me/', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' }
-      });
+      const res = await api.patch('users/me/', formData);
+
       setUser(res.data);
       onClose();
     } catch (err) {

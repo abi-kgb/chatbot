@@ -35,9 +35,8 @@ function CreateGroupModal({ onClose, onSuccess }) {
         formData.append('avatar', avatarFile);
       }
 
-      const res = await api.post('chat/groups/', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' }
-      });
+      const res = await api.post('chat/groups/', formData);
+
       onSuccess(res.data);
     } catch (err) {
       console.error('Failed to create group', err);
