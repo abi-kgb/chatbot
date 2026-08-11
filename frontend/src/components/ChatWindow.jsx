@@ -254,24 +254,65 @@ function ChatWindow({ user, chat, onUpdateChat, onLogout, onStartCall, conversat
     }
   };
 
+  const sendFileMessageDirectly = async (fileObj, captionText = '', isHD = false) => {
+    if (!fileObj) return;
+
+    try {
+      const endpoint = isGroup 
+        ? `chat/groups/${chat.id}/messages/` 
+        : `chat/conversations/${chat.id}/messages/`;
+        
+      const formData = new FormData();
+      if (captionText && captionText.trim()) formData.append('content', captionText.trim());
+      formData.append('file', fileObj);
+
+      let msgType = 'document';
+      if (fileObj.type) {
+        if (fileObj.type.startsWith('image/')) msgType = 'image';
+        else if (fileObj.type.startsWith('video/')) msgType = 'video';
+        else if (fileObj.type.startsWith('audio/')) msgType = 'audio';
+      }
+      formData.append('message_type', msgType);
+
+      if (isHD) formData.append('metadata', JSON.stringify({ is_hd: true }));
+      if (replyingTo) formData.append('reply_to', replyingTo.id);
+      if (isGroup) {
+        formData.append('group', chat.id);
+      } else {
+        formData.append('conversation', chat.id);
+      }
+        
+      const res = await api.post(endpoint, formData);
+
+      shouldAutoScroll.current = true;
+      setMessages(prev => {
+        if (prev.find(m => m.id === res.data.id)) return prev;
+        return [...prev, res.data];
+      });
+      playSentMessageSound();
+      setNewMessage('');
+      setSelectedFile(null);
+      setSelectedFileIsHD(false);
+      setReplyingTo(null);
+      onUpdateChat({
+        ...chat,
+        last_message: res.data,
+        updated_at: new Date().toISOString()
+      });
+    } catch (err) {
+      console.error('Failed to send file message', err);
+      showAlert('❌ Upload Failed', 'Failed to upload attachment. Please check network connection and try again.');
+    }
+  };
+
   const handleDocumentPreSend = (fileObj, caption) => {
-    setSelectedFile(fileObj);
-    if (caption && caption.trim()) setNewMessage(caption);
     setPendingPreSendDocument(null);
-    setTimeout(() => {
-      document.getElementById('chat-send-btn')?.click();
-    }, 50);
+    sendFileMessageDirectly(fileObj, caption, false);
   };
 
   const handleImageEditorSend = (editedFile, caption, isHD) => {
-    setSelectedFile(editedFile);
-    setSelectedFileIsHD(Boolean(isHD));
-    if (caption && caption.trim()) setNewMessage(caption);
     setImagePreviewFile(null);
-    // Auto-submit immediately
-    setTimeout(() => {
-      document.getElementById('chat-send-btn')?.click();
-    }, 50);
+    sendFileMessageDirectly(editedFile, caption, isHD);
   };
 
   const startRecording = async () => {
@@ -317,6 +358,17 @@ function ChatWindow({ user, chat, onUpdateChat, onLogout, onStartCall, conversat
     e.preventDefault();
     if (!newMessage.trim() && !selectedFile) return;
 
+    if (selectedFile) {
+      const fileToSend = selectedFile;
+      const captionText = newMessage;
+      const isHD = selectedFileIsHD;
+      setSelectedFile(null);
+      setSelectedFileIsHD(false);
+      setNewMessage('');
+      await sendFileMessageDirectly(fileToSend, captionText, isHD);
+      return;
+    }
+
     try {
       if (editingMessage) {
         const endpoint = isGroup 
@@ -336,14 +388,13 @@ function ChatWindow({ user, chat, onUpdateChat, onLogout, onStartCall, conversat
         
       const formData = new FormData();
       if (newMessage.trim()) formData.append('content', newMessage);
-      if (selectedFile) formData.append('file', selectedFile);
-      if (selectedFileIsHD) formData.append('metadata', JSON.stringify({ is_hd: true }));
       if (replyingTo) formData.append('reply_to', replyingTo.id);
       if (isGroup) {
         formData.append('group', chat.id);
       } else {
         formData.append('conversation', chat.id);
       }
+      formData.append('message_type', 'text');
         
       const res = await api.post(endpoint, formData);
 
@@ -677,8 +728,11 @@ function ChatWindow({ user, chat, onUpdateChat, onLogout, onStartCall, conversat
     if (!fileUrl) return null;
     let urlStr = typeof fileUrl === 'string' ? fileUrl : (fileUrl.url || fileUrl.name || String(fileUrl));
     const fullUrl = getMediaUrl(urlStr);
-    const isImage = urlStr.match(/\.(jpeg|jpg|gif|png|webp)$/i) != null;
-    const isAudio = urlStr.match(/\.(webm|mp3|ogg|wav)$/i) != null;
+    
+    const cleanUrl = urlStr.split('?')[0].split('#')[0];
+    const isImage = cleanUrl.match(/\.(jpeg|jpg|gif|png|webp|bmp|heic|heif|svg)$/i) != null;
+    const isAudio = cleanUrl.match(/\.(webm|mp3|ogg|wav|m4a|aac|flac)$/i) != null;
+    const isVideo = cleanUrl.match(/\.(mp4|mov|webm|mkv|avi|3gp)$/i) != null;
     const isHD = Boolean(metadata?.is_hd);
 
     if (isImage) {
@@ -707,11 +761,19 @@ function ChatWindow({ user, chat, onUpdateChat, onLogout, onStartCall, conversat
           )}
         </div>
       );
+    } else if (isVideo) {
+      return (
+        <video 
+          controls 
+          src={fullUrl} 
+          style={{ maxWidth: '300px', maxHeight: '300px', borderRadius: '8px', marginTop: '5px' }} 
+        />
+      );
     } else if (isAudio) {
       return <VoiceMessagePlayer src={fullUrl} />;
     } else {
-      const fileName = urlStr.split('/').pop();
-      const ext = fileName.split('.').pop().toLowerCase();
+      const fileName = cleanUrl.split('/').pop() || 'document';
+      const ext = fileName.includes('.') ? fileName.split('.').pop().toLowerCase() : '';
 
       const getDocIcon = () => {
         if (['xls', 'xlsx', 'csv'].includes(ext)) return <FileSpreadsheet size={26} color="#22c55e" />;
@@ -726,7 +788,7 @@ function ChatWindow({ user, chat, onUpdateChat, onLogout, onStartCall, conversat
             padding: '10px 14px', backgroundColor: 'rgba(0,0,0,0.18)', borderRadius: '10px',
             border: '1px solid rgba(255,255,255,0.12)', cursor: 'pointer', transition: 'all 0.2s'
           }} 
-          onClick={() => setViewingDocumentModal({ url: urlStr, name: fileName })}
+          onClick={() => setViewingDocumentModal({ url: fullUrl, name: fileName })}
           title="Click to preview document"
         >
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>

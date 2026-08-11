@@ -168,7 +168,24 @@ class MessageViewSet(viewsets.ModelViewSet):
         if content_val and 'original_content' not in metadata:
             metadata['original_content'] = content_val
 
-        serializer.save(sender=self.request.user, metadata=metadata)
+        file_obj = serializer.validated_data.get('file')
+        msg_type = self.request.data.get('message_type')
+        if not msg_type and file_obj:
+            content_type = getattr(file_obj, 'content_type', '')
+            if content_type.startswith('image/'):
+                msg_type = 'image'
+            elif content_type.startswith('video/'):
+                msg_type = 'video'
+            elif content_type.startswith('audio/'):
+                msg_type = 'audio'
+            else:
+                msg_type = 'document'
+
+        save_kwargs = {'sender': self.request.user, 'metadata': metadata}
+        if msg_type:
+            save_kwargs['message_type'] = msg_type
+
+        serializer.save(**save_kwargs)
 
     def perform_update(self, serializer):
         instance = serializer.instance
