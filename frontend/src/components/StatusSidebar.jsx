@@ -51,7 +51,12 @@ function StatusSidebar({ user, onSelectChat, onLogout, onRequestAppLock, onUnvie
   useEffect(() => {
     fetchStatuses();
     const interval = setInterval(fetchStatuses, 30000);
-    return () => clearInterval(interval);
+    const handleStatusUpdate = () => fetchStatuses();
+    window.addEventListener('chatbox_status_updated', handleStatusUpdate);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('chatbox_status_updated', handleStatusUpdate);
+    };
   }, [user]);
 
   const fetchStatuses = async () => {

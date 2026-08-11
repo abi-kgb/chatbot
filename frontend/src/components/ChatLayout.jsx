@@ -141,6 +141,8 @@ function ChatLayout({ user, setUser, onLogout, onRequestAppLock }) {
                   callStartTimeRef.current = Date.now();
                 });
               }
+            } else if (data.type === 'status_updated') {
+              window.dispatchEvent(new CustomEvent('chatbox_status_updated', { detail: data }));
             } else if (data.type === 'profile_update') {
               const updateParticipants = (chat) => {
                 if (chat.participants.some(p => String(p.id) === String(data.user_id))) {

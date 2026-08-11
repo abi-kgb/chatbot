@@ -990,11 +990,37 @@ class StatusViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         from django.utils import timezone
         from datetime import timedelta
+        from users.models import Contact
+        from .models import Conversation
+
         now = timezone.now()
         twenty_four_hours_ago = now - timedelta(hours=24)
         # Permanently delete all statuses older than 24 hours from the database
         Status.objects.filter(created_at__lt=twenty_four_hours_ago).delete()
-        return Status.objects.filter(created_at__gte=twenty_four_hours_ago).order_by('created_at')
+
+        current_user = self.request.user
+
+        # Contacts saved by current user
+        my_contact_user_ids = set(Contact.objects.filter(user=current_user).values_list('contact_user_id', flat=True))
+        
+        # Users who saved current user in their contacts
+        who_saved_me_ids = set(Contact.objects.filter(contact_user=current_user).values_list('user_id', flat=True))
+
+        # Direct conversation partners
+        conv_partner_ids = set()
+        convs = Conversation.objects.filter(participants=current_user)
+        for c in convs:
+            for p in c.participants.all():
+                if p.id != current_user.id:
+                    conv_partner_ids.add(p.id)
+
+        # Contact privacy set: Only contacts, mutual contacts, conversation partners, and self can view statuses
+        allowed_user_ids = my_contact_user_ids | who_saved_me_ids | conv_partner_ids | {current_user.id}
+
+        return Status.objects.filter(
+            created_at__gte=twenty_four_hours_ago,
+            user_id__in=allowed_user_ids
+        ).order_by('created_at')
 
     def perform_create(self, serializer):
         metadata = self.request.data.get('metadata')
@@ -1004,9 +1030,43 @@ class StatusViewSet(viewsets.ModelViewSet):
                 metadata = json.loads(metadata)
             except Exception:
                 metadata = {}
-            serializer.save(user=self.request.user, metadata=metadata)
+            status_obj = serializer.save(user=self.request.user, metadata=metadata)
         else:
-            serializer.save(user=self.request.user)
+            status_obj = serializer.save(user=self.request.user)
+
+        # Broadcast real-time status update to authorized contacts via WebSockets
+        try:
+            from users.models import Contact
+            from .models import Conversation
+            from channels.layers import get_channel_layer
+            from asgiref.sync import async_to_sync
+
+            current_user = self.request.user
+            my_contact_user_ids = set(Contact.objects.filter(user=current_user).values_list('contact_user_id', flat=True))
+            who_saved_me_ids = set(Contact.objects.filter(contact_user=current_user).values_list('user_id', flat=True))
+            conv_partner_ids = set()
+            for c in Conversation.objects.filter(participants=current_user):
+                for p in c.participants.all():
+                    if p.id != current_user.id:
+                        conv_partner_ids.add(p.id)
+
+            target_user_ids = my_contact_user_ids | who_saved_me_ids | conv_partner_ids
+            channel_layer = get_channel_layer()
+            if channel_layer and target_user_ids:
+                status_data = StatusSerializer(status_obj, context={'request': self.request}).data
+                for target_id in target_user_ids:
+                    async_to_sync(channel_layer.group_send)(
+                        f'user_{target_id}',
+                        {
+                            'type': 'global_event',
+                            'event': {
+                                'type': 'status_updated',
+                                'status': status_data
+                            }
+                        }
+                    )
+        except Exception as e:
+            print("Failed to broadcast status update:", e)
 
     def perform_destroy(self, instance):
         if instance.user != self.request.user:
